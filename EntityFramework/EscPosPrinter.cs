@@ -1,18 +1,18 @@
 namespace EntityFramework
 {
+    using Microsoft.EntityFrameworkCore;
     using QuestPDF.Fluent;
     using QuestPDF.Helpers;
     using QuestPDF.Infrastructure;
     using SkiaSharp;
     using Svg.Skia;
     using System;
+    using System.Collections.Generic;
     using System.Diagnostics;
     using System.Globalization;
     using System.IO;
     using System.Linq;
     using System.Reflection;
-    using System.Collections.Generic;
-    using Microsoft.EntityFrameworkCore;
 
     public static class EscPosPrinter
     {
@@ -23,6 +23,7 @@ namespace EntityFramework
         }
 
         // Print a Vente receipt using QuestPdfPrinter helper for ventes
+
         public static void PrintVenteReceipt(string? printerName, Vente vente, int dotsPerLine = 576, bool cut = false)
         {
             if (vente is null) throw new ArgumentNullException(nameof(vente));
@@ -63,6 +64,7 @@ namespace EntityFramework
         }
 
         // New: generate & open a small PDF receipt for a Vente using same header logic as user receipts
+
         public static void GeneratePdfAndOpenVente(Vente vente) 
         {
             if (vente is null) throw new ArgumentNullException(nameof(vente));
@@ -184,7 +186,7 @@ namespace EntityFramework
                             });
 
                             col.Item().PaddingTop(8).LineHorizontal(1);
-                            col.Item().PaddingTop(6).Text("Merci").AlignCenter().FontSize(9);
+                            col.Item().Text("Merci pour votre confiance").AlignCenter().FontSize(9).Bold();
                         });
 
                         // No dotted footer line — removed as requested
@@ -394,15 +396,17 @@ namespace EntityFramework
                         {
                             // swallow - we already logged earlier
                         }
-
+                      
                         // Add a top margin before the "Ticket" title to increase spacing from the header
-                        col.Item().PaddingTop(10).Text("Ticket").FontSize(14).Bold().AlignCenter();
+                    
+                        col.Item().PaddingVertical(4).LineHorizontal(1);
+                        col.Item().Text("Ticket").FontSize(14).Bold().AlignCenter();
+                        col.Item().Text(user.Id.ToString(fr)).FontSize(42).Bold().AlignCenter();
                         col.Item().PaddingVertical(4).LineHorizontal(1);
                     });
 
                     page.Content().Column(col =>
                     {
-                        col.Item().PaddingVertical(4).LineHorizontal(1);
 
                         // Replace the simple vertical list with a two-column label/value table.
                         col.Item().Element(containerTable =>
@@ -421,12 +425,15 @@ namespace EntityFramework
                                 {
                                     if (string.IsNullOrWhiteSpace(value)) return;
 
-                                    table.Cell().PaddingVertical(2).Text(label).FontSize(9).SemiBold();
-                                    table.Cell().PaddingVertical(2).Text(value).FontSize(9);
+                                    if(label != "N°")
+                                    {
+                                  
+                                        table.Cell().PaddingVertical(2).Text(label).FontSize(9).SemiBold();
+                                        table.Cell().PaddingVertical(2).Text(value).FontSize(9);
+                                    }
                                 }
 
                                 // Always include ID as first row
-                                AddRow("N°", user.Id.ToString(fr));
 
                                 AddRow("Nom", NameText);
                                 AddRow("Tél", PhoneText);
@@ -453,7 +460,7 @@ namespace EntityFramework
 
                         col.Item().PaddingTop(6).Text($"Imprimé le: {DateTime.Now.ToString("f", fr)}").FontSize(9);
                         col.Item().PaddingVertical(6).LineHorizontal(1);
-                        col.Item().Text("Merci").AlignCenter().FontSize(9);
+                        col.Item().Text("Merci pour votre confiance").AlignCenter().FontSize(9).Bold();
                     });
                 });
             });

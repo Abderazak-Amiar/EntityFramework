@@ -1,26 +1,36 @@
-using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Drawing;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Windows.Forms;
-
 namespace EntityFramework
 {
+    using Microsoft.EntityFrameworkCore;
+    using System;
+    using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.Drawing;
+    using System.Globalization;
+    using System.IO;
+    using System.Linq;
+    using System.Windows.Forms;
+
     public partial class Form1 : Form
     {
         private readonly BindingSource usersBinding = new BindingSource();
 
         // Prevent programmatic selection changes from triggering the selection handler
+
         private bool suppressSelectionEvents;
 
         // Prevent re-entrancy when applying portion
+
         private bool suppressPortionApply;
 
         public List<User> DatabaseUsers { get; private set; } = new List<User>();
+
+        // Vente pagination fields
+
+        private readonly int ventePageSize = 10;
+
+        private int venteCurrentPage = 1;
+
+        private int venteTotalPages = 1;
 
         public Form1()
         {
@@ -143,7 +153,6 @@ namespace EntityFramework
             {
                 ConfigureStatsGrid();
 
-
                 // Populate lists and stats now that grids are configured
                 RefreshUsers();
                 LoadParameters();
@@ -159,6 +168,35 @@ namespace EntityFramework
             // Load today's ventes into the UI list
             try
             {
+                // Populate vente year combo for the Vente tab
+                if (venteYearComboBox != null)
+                {
+                    venteYearComboBox.SelectedIndexChanged -= VenteYearComboBox_SelectedIndexChanged;
+                    venteYearComboBox.Items.Clear();
+                    venteYearComboBox.Items.Add("All");
+
+                    using var ctx = new DataContext();
+                    var venteYears = ctx.Ventes?
+                        .Select(v => v.CreatedAt.Year)
+                        .Distinct()
+                        .OrderByDescending(y => y)
+                        .ToList();
+
+                    if (venteYears != null && venteYears.Count > 0)
+                    {
+                        foreach (var y in venteYears) venteYearComboBox.Items.Add(y.ToString());
+                        venteYearComboBox.SelectedIndex = 0;
+                    }
+                    else
+                    {
+                        var current = DateTime.Now.Year;
+                        for (int i = 0; i < 5; i++) venteYearComboBox.Items.Add((current - i).ToString());
+                        venteYearComboBox.SelectedIndex = 0;
+                    }
+
+                    venteYearComboBox.SelectedIndexChanged += VenteYearComboBox_SelectedIndexChanged;
+                }
+
                 LoadVentesToday();
             }
             catch
@@ -233,6 +271,7 @@ namespace EntityFramework
         // ---------------------------
 
         // Smart decimal formatter used across the form
+
         private static string FormatDecimalSmart(decimal value)
         {
             return decimal.Truncate(value) == value
@@ -241,6 +280,7 @@ namespace EntityFramework
         }
 
         // Refresh the UI list of users from the database and bind to the BindingSource.
+
         private void RefreshUsers()
         {
             try
@@ -259,6 +299,7 @@ namespace EntityFramework
         }
 
         // Load application Parameters into the UI controls (defensive)
+
         private void LoadParameters()
         {
             try
@@ -306,6 +347,7 @@ namespace EntityFramework
         }
 
         // Populate textBox5 with default unit price (if empty) from Parameters or UI fallback
+
         private void PopulateDefaultUnitPrice()
         {
             try
@@ -340,6 +382,7 @@ namespace EntityFramework
         }
 
         // Apply a simple text filter to the in-memory users list and rebind
+
         private void ApplyFilter(string text)
         {
             try
@@ -371,6 +414,7 @@ namespace EntityFramework
         }
 
         // Numbering/config for ItemList
+
         private void ConfigureGridColumns()
         {
             if (ItemList == null) return;
@@ -435,7 +479,8 @@ namespace EntityFramework
             ClearGridSelection();
         }
 
-        // Load today's ventes into the DataGridView
+        // Load today's ventes into the DataGridView (now supports year filter and pagination)
+
         private void LoadVentesToday()
         {
             try
@@ -443,20 +488,62 @@ namespace EntityFramework
                 if (dgvVentesToday == null) return;
 
                 using var ctx = new DataContext();
-                var today = DateTime.Today;
-                var ventes = ctx.Ventes?
-                    .Where(v => v.CreatedAt.Date == today)
+                // Build base query (read-only)
+                var query = (ctx.Ventes ?? Enumerable.Empty<Vente>().AsQueryable()).AsNoTracking();
+
+                // Apply year filter from venteYearComboBox if present
+                try
+                {
+                    if (venteYearComboBox != null && venteYearComboBox.SelectedItem != null)
+                    {
+                        var sel = venteYearComboBox.SelectedItem.ToString();
+                        if (!string.IsNullOrEmpty(sel) && !sel.Equals("All", StringComparison.InvariantCultureIgnoreCase))
+                        {
+                            if (int.TryParse(sel, out int selYear))
+                            {
+                                query = query.Where(v => v.CreatedAt.Year == selYear);
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // swallow filtering errors
+                }
+
+                // compute totals for pagination (server-side)
+                var totalCount = query.Count();
+                venteTotalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)ventePageSize));
+                if (venteCurrentPage < 1) venteCurrentPage = 1;
+                if (venteCurrentPage > venteTotalPages) venteCurrentPage = venteTotalPages;
+
+                // fetch paged items
+                var ventes = query
                     .OrderByDescending(v => v.CreatedAt)
-                    .ToList() ?? new List<Vente>();
+                    .Skip((venteCurrentPage - 1) * ventePageSize)
+                    .Take(ventePageSize)
+                    .ToList();
 
                 dgvVentesToday.Rows.Clear();
                 var fr = CultureInfo.GetCultureInfo("fr-FR");
+
+                // Correct date format: hours:minutes day-month-year
+                const string dateFormat = "HH:mm dd-MM-yyyy";
+
                 foreach (var v in ventes)
                 {
-                    var time = v.CreatedAt.ToString("HH:mm", fr);
-                    // We don't need to provide a value for the button column when UseColumnTextForButtonValue == true
-                    dgvVentesToday.Rows.Add(v.Id, time, v.NbrLitres.ToString("N0", fr), v.Prix.ToString("N2", fr), v.Montant.ToString("N2", fr));
+                    var formattedDate = v.CreatedAt.ToString(dateFormat, fr);
+                    dgvVentesToday.Rows.Add(v.Id, formattedDate, v.NbrLitres.ToString("N0", fr), v.Prix.ToString("N2", fr), v.Montant.ToString("N2", fr));
                 }
+
+                // Update pagination UI (include total items)
+                if (lblVentePage != null)
+                {
+                    lblVentePage.Text = $"Page {venteCurrentPage} / {venteTotalPages} — {totalCount} Ventes";
+                }
+
+                if (btnVentePrev != null) btnVentePrev.Enabled = venteCurrentPage > 1;
+                if (btnVenteNext != null) btnVenteNext.Enabled = venteCurrentPage < venteTotalPages;
             }
             catch
             {
@@ -465,6 +552,7 @@ namespace EntityFramework
         }
 
         // Event handler for vente fields to update montant live
+
         private void VenteFields_TextChanged(object? sender, EventArgs e)
         {
             UpdateVenteMontant();
@@ -638,6 +726,7 @@ namespace EntityFramework
         // Apply selected mode:
         // - Portion: clear and disable textBox5, textBox6, textBox7
         // - Paiement: enable textBox5, textBox6, textBox7; populate unit price & portion-liters from Parameters (or UI fallbacks)
+
         private void ApplyMode()
         {
             try
@@ -722,6 +811,7 @@ namespace EntityFramework
 
         // Compute textBox6 = textBox4 * portion (txtPortion as percent 0..100).
         // Writes a decimal into textBox6 using current culture (no integer rounding).
+
         private void ApplyPortionToTextBox6()
         {
             try
@@ -825,6 +915,7 @@ namespace EntityFramework
 
         // Recalculate AmountDue = UnitPrice * PayedLiters and update textBox7 live.
         // Accept decimal values for textBox6 (payed liters) so totals use fractional liters.
+
         private void PriceOrPaidLiters_TextChanged(object? sender, EventArgs e)
         {
             try
@@ -856,23 +947,53 @@ namespace EntityFramework
         }
 
         // Designer-referenced no-op or minimal handlers
-        private void label3_Click(object sender, EventArgs e) { }
-        private void label9_Click(object sender, EventArgs e) { }
-        private void label4_Click(object sender, EventArgs e) { }
-        private void label5_Click(object sender, EventArgs e) { }
-        private void label6_Click(object sender, EventArgs e) { }
-        private void label7_Click(object sender, EventArgs e) { }
-        // Fixed signatures: provide identifier name for second parameter
-        private void label8_Click(object sender, EventArgs e) { }
-        private void label1_Click(object sender, EventArgs e) { }
-        private void label2_Click(object sender, EventArgs e) { }
 
-        private void textBox1_TextChanged(object sender, EventArgs e) { }
-        private void textBox1_TextChanged_1(object sender, EventArgs e) { }
-        private void textBox2_TextChanged(object sender, EventArgs e) { }
-        private void textBox6_TextChanged(object sender, EventArgs e) { }
-        private void Poids_Click(object sender, EventArgs e) { }
-        private void weightTextBox_TextChanged(object sender, EventArgs e) { }
+        private void label3_Click(object sender, EventArgs e)         {
+        }
+
+        private void label9_Click(object sender, EventArgs e)         {
+        }
+
+        private void label4_Click(object sender, EventArgs e)         {
+        }
+
+        private void label5_Click(object sender, EventArgs e)         {
+        }
+
+        private void label6_Click(object sender, EventArgs e)         {
+        }
+
+        private void label7_Click(object sender, EventArgs e)         {
+        }
+
+        // Fixed signatures: provide identifier name for second parameter
+
+        private void label8_Click(object sender, EventArgs e)         {
+        }
+
+        private void label1_Click(object sender, EventArgs e)         {
+        }
+
+        private void label2_Click(object sender, EventArgs e)         {
+        }
+
+        private void textBox1_TextChanged(object sender, EventArgs e)         {
+        }
+
+        private void textBox1_TextChanged_1(object sender, EventArgs e)         {
+        }
+
+        private void textBox2_TextChanged(object sender, EventArgs e)         {
+        }
+
+        private void textBox6_TextChanged(object sender, EventArgs e)         {
+        }
+
+        private void Poids_Click(object sender, EventArgs e)         {
+        }
+
+        private void weightTextBox_TextChanged(object sender, EventArgs e)         {
+        }
 
         private void clearBtn_Click(object sender, EventArgs e)
         {
@@ -887,10 +1008,14 @@ namespace EntityFramework
             }
         }
 
-        private void lblCompanyAddressPhone_Click(object sender, EventArgs e) { }
-        private void txtCompanyAddressPhone_TextChanged(object sender, EventArgs e) { }
+        private void lblCompanyAddressPhone_Click(object sender, EventArgs e)         {
+        }
 
-        private void lblPortion_Click(object sender, EventArgs e) { }
+        private void txtCompanyAddressPhone_TextChanged(object sender, EventArgs e)         {
+        }
+
+        private void lblPortion_Click(object sender, EventArgs e)         {
+        }
 
         private void BtnSaveParameters_Click(object sender, EventArgs e)
         {
@@ -968,7 +1093,6 @@ namespace EntityFramework
             }
         }
 
-       
         private void btnEnregistrerVente_Click(object sender, EventArgs e)
         {
             try
@@ -1007,20 +1131,11 @@ namespace EntityFramework
                     ctx.SaveChanges();
                 }
 
-                // Refresh UI
+                // Reset to first page and Refresh UI
+                venteCurrentPage = 1;
                 LoadVentesToday();
 
-                // Show toast (if available) for a short time
-                try
-                {
-                    if (lblVenteToast != null)
-                    {
-                        lblVenteToast.Text = "Vente enregistrée.";
-                        lblVenteToast.Visible = true;
-                        toastTimer.Enabled = true;
-                    }
-                }
-                catch { }
+             
 
                 // Use EscPosPrinter helper to print the vente receipt (delegates to QuestPdfPrinter.GeneratePdfAndOpenVente today).
                 // Only attempt printing when the "print receipt" checkbox is present and checked.
@@ -1048,7 +1163,9 @@ namespace EntityFramework
                 MessageBox.Show("Erreur lors de l'enregistrement de la vente : " + ex.Message);
             }
         }
+
         // Implement delete button click on today's ventes grid
+
         private void DgvVentesToday_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             try
@@ -1116,7 +1233,12 @@ namespace EntityFramework
                 ctx.Ventes.Remove(vente);
                 ctx.SaveChanges();
 
-                // Refresh UI after deletion
+                // Refresh UI after deletion: keep current page if possible, else move back a page
+                using var ctx2 = new DataContext();
+                var total = ctx2.Ventes?.Count() ?? 0;
+                var newTotalPages = Math.Max(1, (int)Math.Ceiling(total / (double)ventePageSize));
+                if (venteCurrentPage > newTotalPages) venteCurrentPage = newTotalPages;
+
                 LoadVentesToday();
                 BtnRefreshStats_Click(this, EventArgs.Empty);
             }
@@ -1125,19 +1247,6 @@ namespace EntityFramework
                 MessageBox.Show("Erreur lors de la suppression de la vente : " + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
-        private void ToastTimer_Tick(object sender, EventArgs e)
-        {
-            try
-            {
-                if (lblVenteToast != null) lblVenteToast.Visible = false;
-                toastTimer.Enabled = false;
-            }
-            catch
-            {
-                // swallow
-            }
-        }
-
         private void ModeComboBox_SelectedIndexChanged(object sender, EventArgs e)
         {
             try
@@ -1162,7 +1271,49 @@ namespace EntityFramework
             }
         }
 
+        // Pagination controls for ventes
+
+        private void BtnVentePrev_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (venteCurrentPage > 1)
+                {
+                    venteCurrentPage--;
+                    LoadVentesToday();
+                }
+            }
+            catch { }
+        }
+
+        private void BtnVenteNext_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (venteCurrentPage < venteTotalPages)
+                {
+                    venteCurrentPage++;
+                    LoadVentesToday();
+                }
+            }
+            catch { }
+        }
+
+        // Year selection changed for vente tab
+
+        private void VenteYearComboBox_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            try
+            {
+                // Reset to page 1 and reload ventes for the selected year
+                venteCurrentPage = 1;
+                LoadVentesToday();
+            }
+            catch { }
+        }
+
         // Called when user changes selection
+
         private void ItemList_SelectedRowsChanged(object? sender, EventArgs e)
         {
             if (suppressSelectionEvents) return;
@@ -1431,6 +1582,7 @@ namespace EntityFramework
         }
 
         // Search box handler wired in Initialize / Designer
+
         private void SearchTextBox_TextChanged(object? sender, EventArgs e)
         {
             try
@@ -1444,6 +1596,7 @@ namespace EntityFramework
         }
 
         // Refresh statistics — wired from Designer and called from Form1_Load
+
         private void BtnRefreshStats_Click(object? sender, EventArgs e)
         {
             try
@@ -1563,12 +1716,13 @@ namespace EntityFramework
 
         // Designer-wired click handlers (ItemList and CRUD buttons). Minimal but functional.
         // ItemList CellContentClick (wired in Designer)
+
         private void ItemList_CellContentClick(object? sender, DataGridViewCellEventArgs e)
         {
-            // no-op placeholder, implement if needed (e.g., handle delete button cell)
         }
 
         // Create user button handler (wired in Designer)
+
         private void createBtn_Click(object? sender, EventArgs e)
         {
             try
@@ -1646,6 +1800,7 @@ namespace EntityFramework
         }
 
         // Update selected user (wired in Designer)
+
         private void updateBtn_Click(object? sender, EventArgs e)
         {
             if (ItemList.CurrentRow == null)
@@ -1735,6 +1890,7 @@ namespace EntityFramework
         }
 
         // Delete selected user (wired in Designer)
+
         private void deleteBtn_Click(object? sender, EventArgs e)
         {
             if (ItemList.CurrentRow == null)
@@ -1780,6 +1936,7 @@ namespace EntityFramework
         }
 
         // Tab control selected index changed (wired in Designer)
+
         private void MainTabControl_SelectedIndexChanged(object? sender, EventArgs e)
         {
             try
@@ -1790,6 +1947,7 @@ namespace EntityFramework
                 if (mainTabControl.SelectedTab == tabVente)
                 {
                     PopulateVenteDefaultPrice();
+                    // keep current page and selected year; reload ventes
                     LoadVentesToday();
                 }
             }
@@ -1800,6 +1958,7 @@ namespace EntityFramework
         }
 
         // Added handler for yearComboBox SelectedIndexChanged (wired in Designer)
+
         private void YearComboBox_SelectedIndexChanged(object? sender, EventArgs e)
         {
             try

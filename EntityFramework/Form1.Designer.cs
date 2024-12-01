@@ -28,7 +28,6 @@
         /// </summary>
         private void InitializeComponent()
         {
-            components = new System.ComponentModel.Container();
             DataGridViewCellStyle dataGridViewCellStyle1 = new DataGridViewCellStyle();
             ItemList = new DataGridView();
             colNumber = new DataGridViewTextBoxColumn();
@@ -85,6 +84,10 @@
             lblVenteNbrLitres = new Label();
             lblVenteMontant = new Label();
             lblVenteMontantValue = new Label();
+            venteYearComboBox = new ComboBox();
+            btnVentePrev = new Button();
+            lblVentePage = new Label();
+            btnVenteNext = new Button();
             dgvVentesToday = new DataGridView();
             colVenteId = new DataGridViewTextBoxColumn();
             colVenteTime = new DataGridViewTextBoxColumn();
@@ -93,7 +96,6 @@
             colVenteMontant = new DataGridViewTextBoxColumn();
             colVenteDelete = new DataGridViewButtonColumn();
             chkPrintReceipt = new CheckBox();
-            lblVenteToast = new Label();
             tabStatistics = new TabPage();
             yearComboBox = new ComboBox();
             btnRefreshStats = new Button();
@@ -103,7 +105,6 @@
             dgvVenteStats = new DataGridView();
             colVenteMetric = new DataGridViewTextBoxColumn();
             colVenteValue = new DataGridViewTextBoxColumn();
-            toastTimer = new System.Windows.Forms.Timer(components);
             modeComboBox = new ComboBox();
             ((System.ComponentModel.ISupportInitialize)ItemList).BeginInit();
             mainTabControl.SuspendLayout();
@@ -622,9 +623,12 @@
             tabVente.Controls.Add(lblVenteNbrLitres);
             tabVente.Controls.Add(lblVenteMontant);
             tabVente.Controls.Add(lblVenteMontantValue);
+            tabVente.Controls.Add(venteYearComboBox);
+            tabVente.Controls.Add(btnVentePrev);
+            tabVente.Controls.Add(lblVentePage);
+            tabVente.Controls.Add(btnVenteNext);
             tabVente.Controls.Add(dgvVentesToday);
             tabVente.Controls.Add(chkPrintReceipt);
-            tabVente.Controls.Add(lblVenteToast);
             tabVente.Location = new Point(4, 24);
             tabVente.Name = "tabVente";
             tabVente.Padding = new Padding(3);
@@ -694,13 +698,51 @@
             lblVenteMontantValue.Size = new Size(0, 15);
             lblVenteMontantValue.TabIndex = 7;
             // 
+            // venteYearComboBox
+            // 
+            venteYearComboBox.FormattingEnabled = true;
+            venteYearComboBox.Location = new Point(24, 184);
+            venteYearComboBox.Name = "venteYearComboBox";
+            venteYearComboBox.Size = new Size(140, 23);
+            venteYearComboBox.TabIndex = 21;
+            venteYearComboBox.SelectedIndexChanged += VenteYearComboBox_SelectedIndexChanged;
+            // 
+            // btnVentePrev
+            // 
+            btnVentePrev.Location = new Point(568, 480);
+            btnVentePrev.Name = "btnVentePrev";
+            btnVentePrev.Size = new Size(75, 23);
+            btnVentePrev.TabIndex = 22;
+            btnVentePrev.Text = "Précédent";
+            btnVentePrev.UseVisualStyleBackColor = true;
+            btnVentePrev.Click += BtnVentePrev_Click;
+            // 
+            // lblVentePage
+            // 
+            lblVentePage.AutoSize = true;
+            lblVentePage.Location = new Point(27, 484);
+            lblVentePage.Name = "lblVentePage";
+            lblVentePage.Size = new Size(59, 15);
+            lblVentePage.TabIndex = 23;
+            lblVentePage.Text = "Page 0 / 0";
+            // 
+            // btnVenteNext
+            // 
+            btnVenteNext.Location = new Point(651, 480);
+            btnVenteNext.Name = "btnVenteNext";
+            btnVenteNext.Size = new Size(75, 23);
+            btnVenteNext.TabIndex = 24;
+            btnVenteNext.Text = "Suivant";
+            btnVenteNext.UseVisualStyleBackColor = true;
+            btnVenteNext.Click += BtnVenteNext_Click;
+            // 
             // dgvVentesToday
             // 
             dgvVentesToday.AllowUserToAddRows = false;
             dgvVentesToday.AllowUserToDeleteRows = false;
             dgvVentesToday.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             dgvVentesToday.Columns.AddRange(new DataGridViewColumn[] { colVenteId, colVenteTime, colVenteLitres, colVentePrix, colVenteMontant, colVenteDelete });
-            dgvVentesToday.Location = new Point(24, 180);
+            dgvVentesToday.Location = new Point(24, 214);
             dgvVentesToday.Name = "dgvVentesToday";
             dgvVentesToday.ReadOnly = true;
             dgvVentesToday.RowHeadersVisible = false;
@@ -720,7 +762,7 @@
             // 
             // colVenteLitres
             // 
-            colVenteLitres.Name = "Quantité";
+            colVenteLitres.Name = "Litres";
             colVenteLitres.ReadOnly = true;
             // 
             // colVentePrix
@@ -735,7 +777,7 @@
             // 
             // colVenteDelete
             // 
-            colVenteDelete.Name = "Delete";
+            colVenteDelete.Name = "Supprimer";
             colVenteDelete.ReadOnly = true;
             // 
             // chkPrintReceipt
@@ -747,18 +789,6 @@
             chkPrintReceipt.TabIndex = 5;
             chkPrintReceipt.Text = "Imprimer ticket";
             chkPrintReceipt.UseVisualStyleBackColor = true;
-            // 
-            // lblVenteToast
-            // 
-            lblVenteToast.BackColor = Color.FromArgb(255, 250, 205);
-            lblVenteToast.BorderStyle = BorderStyle.FixedSingle;
-            lblVenteToast.ForeColor = Color.Black;
-            lblVenteToast.Location = new Point(24, 460);
-            lblVenteToast.Name = "lblVenteToast";
-            lblVenteToast.Padding = new Padding(6);
-            lblVenteToast.Size = new Size(360, 28);
-            lblVenteToast.TabIndex = 20;
-            lblVenteToast.Visible = false;
             // 
             // tabStatistics
             // 
@@ -852,11 +882,6 @@
             colVenteValue.HeaderText = "Valeur";
             colVenteValue.Name = "colVenteValue";
             colVenteValue.ReadOnly = true;
-            // 
-            // toastTimer
-            // 
-            toastTimer.Interval = 2000;
-            toastTimer.Tick += ToastTimer_Tick;
             // 
             // modeComboBox
             // 
@@ -963,10 +988,6 @@
         // Print checkbox
         private CheckBox chkPrintReceipt;
 
-        // Toast UI
-        private Label lblVenteToast;
-        private System.Windows.Forms.Timer toastTimer;
-
         // Statistics tab controls
         private Button btnRefreshStats;
 
@@ -996,5 +1017,11 @@
         private RadioButton rdoPortion;
         private RadioButton rdoPaiement;
         private Label label11;
+
+        // NEW: vente UI controls
+        private ComboBox venteYearComboBox;
+        private Button btnVentePrev;
+        private Button btnVenteNext;
+        private Label lblVentePage;
     }
 }

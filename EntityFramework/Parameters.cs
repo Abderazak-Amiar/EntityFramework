@@ -13,9 +13,12 @@ namespace EntityFramework
         [MaxLength(200)]
         public string? CompanyName { get; set; }
 
-        // Combined company address / phone (per UI)
+        // Separate address and phone fields (preferred).
         [MaxLength(500)]
-        public string? CompanyAddressPhone { get; set; }
+        public string? CompanyAddress { get; set; }
+
+        [MaxLength(50)]
+        public string? CompanyPhone { get; set; }
 
         // Prix/L (mapped from UI txtPricePerLiter)
         public decimal DefaultUnitPrice { get; set; } = 0m;

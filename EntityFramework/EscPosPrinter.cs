@@ -11,6 +11,8 @@ namespace EntityFramework
     using System.IO;
     using System.Linq;
     using System.Reflection;
+    using System.Collections.Generic;
+    using Microsoft.EntityFrameworkCore;
 
     public static class EscPosPrinter
     {
@@ -79,6 +81,53 @@ namespace EntityFramework
             string? UnitPriceText = (user.UnitPriceLiter.HasValue && user.UnitPriceLiter.Value != 0m) ? FormatDecimalSmart(user.UnitPriceLiter.Value, fr) : null;
             string? PayedLitersText = (user.PayedLiters.HasValue && user.PayedLiters.Value != 0) ? user.PayedLiters.Value.ToString(fr) : null;
             string? AmountDueText = (user.AmountDue.HasValue && user.AmountDue.Value != 0m) ? FormatDecimalSmart(user.AmountDue.Value, fr) : null;
+
+            // Read company parameters safely: only read the explicit columns we expect.
+            string? companyName = null;
+            string? companyAddress = null;
+            string? companyPhone = null;
+            try
+            {
+                using var ctx = new DataContext();
+                var conn = ctx.Database.GetDbConnection();
+                conn.Open();
+
+                using (var pragmaCmd = conn.CreateCommand())
+                {
+                    pragmaCmd.CommandText = "PRAGMA table_info('Parameters');";
+                    using var r = pragmaCmd.ExecuteReader();
+                    var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    while (r.Read())
+                        cols.Add(r.GetString(r.GetOrdinal("name")));
+
+                    var selectCols = new List<string>();
+                    if (cols.Contains("CompanyName")) selectCols.Add("CompanyName");
+                    if (cols.Contains("CompanyAddress")) selectCols.Add("CompanyAddress");
+                    if (cols.Contains("CompanyPhone")) selectCols.Add("CompanyPhone");
+
+                    if (selectCols.Count > 0)
+                    {
+                        using var selectCmd = conn.CreateCommand();
+                        selectCmd.CommandText = "SELECT " + string.Join(", ", selectCols) + " FROM Parameters WHERE Id = 1 LIMIT 1;";
+                        using var r2 = selectCmd.ExecuteReader();
+                        if (r2.Read())
+                        {
+                            if (selectCols.Contains("CompanyName") && !r2.IsDBNull(r2.GetOrdinal("CompanyName")))
+                                companyName = r2.GetString(r2.GetOrdinal("CompanyName")).Trim();
+                            if (selectCols.Contains("CompanyAddress") && !r2.IsDBNull(r2.GetOrdinal("CompanyAddress")))
+                                companyAddress = r2.GetString(r2.GetOrdinal("CompanyAddress")).Trim();
+                            if (selectCols.Contains("CompanyPhone") && !r2.IsDBNull(r2.GetOrdinal("CompanyPhone")))
+                                companyPhone = r2.GetString(r2.GetOrdinal("CompanyPhone")).Trim();
+                        }
+                    }
+                }
+
+                conn.Close();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("QuestPDF: failed reading Parameters safely: " + ex.Message);
+            }
 
             return Document.Create(container =>
             {
@@ -154,34 +203,66 @@ namespace EntityFramework
                             col.Item().PaddingTop(0).Text("Logo de l'entreprise").FontSize(12).AlignCenter();
                         }
 
+                        // Company info (from Parameters) — shown above the ticket title when available
+                        if (!string.IsNullOrWhiteSpace(companyName))
+                        {
+                            col.Item().Text(companyName).FontSize(11).Bold().AlignCenter();
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(companyAddress))
+                        {
+                            col.Item().Text(companyAddress).FontSize(9).AlignCenter();
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(companyPhone))
+                        {
+                            col.Item().Text(companyPhone).FontSize(9).AlignCenter();
+                        }
+
                         col.Item().Text("Ticket").FontSize(14).Bold().AlignCenter();
                         col.Item().PaddingVertical(4).LineHorizontal(1);
                     });
 
                     page.Content().Column(col =>
                     {
-                        void AddIfNotEmpty(string? text)
-                        {
-                            if (!string.IsNullOrWhiteSpace(text))
-                                col.Item().Text(text);
-                        }
-
                         col.Item().PaddingVertical(4).LineHorizontal(1);
 
-                        // Always include ID
-                        col.Item().Text($"N°: {user.Id}");
+                        // Replace the simple vertical list with a two-column label/value table.
+                        col.Item().Element(containerTable =>
+                        {
+                            containerTable.Table(table =>
+                            {
+                                // Define two columns: label (fixed) and value (fill)
+                                table.ColumnsDefinition(columns =>
+                                {
+                                    columns.ConstantColumn(60);    // label column (px)
+                                    columns.RelativeColumn();      // value column (fills)
+                                });
 
-                        // Use precomputed strings only (never access nullable.Value here)
-                        AddIfNotEmpty(NameText is null ? null : $"Nom: {NameText}");
-                        AddIfNotEmpty(PhoneText is null ? null : $"Téléphone: {PhoneText}");
-                        AddIfNotEmpty(AddressText is null ? null : $"Adresse: {AddressText}");
-                        AddIfNotEmpty(NbrBagsText is null ? null : $"Sacs: {NbrBagsText}");
-                        AddIfNotEmpty(NbrContainersText is null ? null : $"Bidons: {NbrContainersText}");
-                        AddIfNotEmpty(WeightText is null ? null : $"Poids: {WeightText}");
-                        AddIfNotEmpty(NbrLitersText is null ? null : $"Litres: {NbrLitersText}");
-                        AddIfNotEmpty(UnitPriceText is null ? null : $"Prix/L: {UnitPriceText}");
-                        AddIfNotEmpty(PayedLitersText is null ? null : $"Litres payés: {PayedLitersText}");
-                        AddIfNotEmpty(AmountDueText is null ? null : $"Montant dû: {AmountDueText}");
+                                // Helper to add a labeled row if the value is not empty.
+                                void AddRow(string label, string? value)
+                                {
+                                    if (string.IsNullOrWhiteSpace(value)) return;
+
+                                    table.Cell().PaddingVertical(2).Text(label).FontSize(9).SemiBold();
+                                    table.Cell().PaddingVertical(2).Text(value).FontSize(9);
+                                }
+
+                                // Always include ID as first row
+                                AddRow("N°", user.Id.ToString(fr));
+
+                                AddRow("Nom", NameText);
+                                AddRow("Tél", PhoneText);
+                                AddRow("Adresse", AddressText);
+                                AddRow("Sacs", NbrBagsText);
+                                AddRow("Bidons", NbrContainersText);
+                                AddRow("Poids", WeightText);
+                                AddRow("Litres", NbrLitersText);
+                                AddRow("Prix/L", UnitPriceText);
+                                AddRow("Litres payés", PayedLitersText);
+                                AddRow("Montant dû", AmountDueText);
+                            });
+                        });
 
                         col.Item().PaddingTop(6).Text($"Imprimé le: {DateTime.Now.ToString("f", fr)}").FontSize(9);
                         col.Item().PaddingVertical(6).LineHorizontal(1);

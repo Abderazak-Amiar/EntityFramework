@@ -73,6 +73,29 @@ namespace EntityFramework
 
             // Populate parameters inputs from DB
             LoadParameters();
+
+            // Wire live recalculation for unit price / paid liters (if designer textboxes exist)
+            try
+            {
+                if (textBox5 != null)
+                {
+                    textBox5.TextChanged -= PriceOrPaidLiters_TextChanged;
+                    textBox5.TextChanged += PriceOrPaidLiters_TextChanged;
+                }
+
+                if (textBox6 != null)
+                {
+                    textBox6.TextChanged -= PriceOrPaidLiters_TextChanged;
+                    textBox6.TextChanged += PriceOrPaidLiters_TextChanged;
+                }
+
+                // Populate unit price input with default (if available and empty)
+                PopulateDefaultUnitPrice();
+            }
+            catch
+            {
+                // Swallow UI wiring errors
+            }
         }
 
         private void RefreshUsers()
@@ -367,16 +390,63 @@ namespace EntityFramework
                 textBox3.Text = selectedUser.NbrContainers;
                 textBox4.Text = selectedUser.NbrLiters?.ToString() ?? string.Empty;
 
-                // Unit price, PayedLiters, AmountDue and Weight are nullable — format only when present/non-zero
-                textBox5.Text = selectedUser.UnitPriceLiter.HasValue && selectedUser.UnitPriceLiter.Value != 0m
-                    ? FormatDecimalSmart(selectedUser.UnitPriceLiter.Value)
-                    : string.Empty;
+                // Unit price: prefer value from user; if missing/zero, populate from Parameters (single-row id=1)
+                decimal effectiveUnitPrice = 0m;
+                bool haveUnitPrice = false;
+
+                if (selectedUser.UnitPriceLiter.HasValue && selectedUser.UnitPriceLiter.Value != 0m)
+                {
+                    effectiveUnitPrice = selectedUser.UnitPriceLiter.Value;
+                    textBox5.Text = FormatDecimalSmart(effectiveUnitPrice);
+                    haveUnitPrice = true;
+                }
+                else
+                {
+                    try
+                    {
+                        using var ctx = new DataContext();
+                        if (ctx.Parameters != null)
+                        {
+                            var parameters = ctx.Parameters.FirstOrDefault(p => p.Id == 1);
+                            if (parameters != null && parameters.DefaultUnitPrice != 0m)
+                            {
+                                effectiveUnitPrice = parameters.DefaultUnitPrice;
+                                textBox5.Text = FormatDecimalSmart(effectiveUnitPrice);
+                                haveUnitPrice = true;
+                            }
+                            else
+                            {
+                                textBox5.Text = string.Empty;
+                            }
+                        }
+                        else
+                        {
+                            textBox5.Text = string.Empty;
+                        }
+                    }
+                    catch
+                    {
+                        // swallow DB errors and leave unit price empty
+                        textBox5.Text = string.Empty;
+                    }
+                }
 
                 textBox6.Text = selectedUser.PayedLiters?.ToString() ?? string.Empty;
 
-                textBox7.Text = selectedUser.AmountDue.HasValue && selectedUser.AmountDue.Value != 0m
-                    ? FormatDecimalSmart(selectedUser.AmountDue.Value)
-                    : string.Empty;
+                // AmountDue: if stored use it; otherwise compute from effectiveUnitPrice * PayedLiters when possible
+                if (selectedUser.AmountDue.HasValue && selectedUser.AmountDue.Value != 0m)
+                {
+                    textBox7.Text = FormatDecimalSmart(selectedUser.AmountDue.Value);
+                }
+                else if (haveUnitPrice && (selectedUser.PayedLiters ?? 0) != 0)
+                {
+                    var amount = (selectedUser.PayedLiters ?? 0) * effectiveUnitPrice;
+                    textBox7.Text = amount != 0m ? FormatDecimalSmart(amount) : string.Empty;
+                }
+                else
+                {
+                    textBox7.Text = string.Empty;
+                }
 
                 weightTextBox.Text = selectedUser.Weight.HasValue && selectedUser.Weight.Value != 0m
                     ? FormatDecimalSmart(selectedUser.Weight.Value)
@@ -505,6 +575,13 @@ namespace EntityFramework
             textBox6.Text = string.Empty;
             textBox7.Text = string.Empty;
             weightTextBox.Text = string.Empty;
+
+            // Company parameter fields
+            txtCompanyName.Text = string.Empty;
+            txtCompanyAddress.Text = string.Empty;
+            txtCompanyPhone.Text = string.Empty;
+            txtPricePerLiter.Text = string.Empty;
+            txtPortion.Text = string.Empty;
         }
 
         // Ensure grid / binding source has no selection and do not fire selection handler while doing it
@@ -593,6 +670,7 @@ namespace EntityFramework
         }
 
         // Add this method to Form1 (near other private helpers)
+
         private void LoadParameters()
         {
             try
@@ -603,9 +681,13 @@ namespace EntityFramework
                 {
                     // No parameters table available yet — clear inputs
                     txtCompanyName.Text = string.Empty;
-                    txtCompanyAddressPhone.Text = string.Empty;
+                    txtCompanyAddress.Text = string.Empty;
+                    txtCompanyPhone.Text = string.Empty;
                     txtPricePerLiter.Text = string.Empty;
                     txtPortion.Text = string.Empty;
+
+                    // Update window title with placeholder when no table
+                    SetWindowTitle(null);
                     return;
                 }
 
@@ -613,7 +695,8 @@ namespace EntityFramework
                 var parameters = context.Parameters.FirstOrDefault(p => p.Id == 1) ?? new Parameters();
 
                 txtCompanyName.Text = parameters.CompanyName ?? string.Empty;
-                txtCompanyAddressPhone.Text = parameters.CompanyAddressPhone ?? string.Empty;
+                txtCompanyAddress.Text = parameters.CompanyAddress ?? string.Empty;
+                txtCompanyPhone.Text = parameters.CompanyPhone ?? string.Empty;
 
                 // Show decimal values using current culture; TryParseDecimal already accepts both cultures on save.
                 txtPricePerLiter.Text = parameters.DefaultUnitPrice != 0m
@@ -623,10 +706,49 @@ namespace EntityFramework
                 txtPortion.Text = parameters.DefaultPortion != 0m
                     ? parameters.DefaultPortion.ToString(System.Globalization.CultureInfo.CurrentCulture)
                     : string.Empty;
+
+                // Update the Form title to "GESTION CLIENTS - {CompanyName}".
+                // When company name is empty, keep the literal "Company Name" as requested.
+                SetWindowTitle(parameters.CompanyName);
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Échec du chargement des paramètres : " + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // New helper to centralize window title update
+        // New helper to centralize window title update
+
+        private void SetWindowTitle(string? companyName)
+        {
+            string display;
+            if (string.IsNullOrWhiteSpace(companyName))
+            {
+                display = "COMPANY NAME";
+            }
+            else
+            {
+                var trimmed = companyName.Trim();
+                try
+                {
+                    var ci = CultureInfo.CurrentCulture;
+                    display = trimmed.ToUpper(ci);
+                }
+                catch
+                {
+                    // Fallback to invariant uppercase if culture-based conversion fails
+                    display = trimmed.ToUpperInvariant();
+                }
+            }
+
+            try
+            {
+                this.Text = $"GESTION CLIENTS - {display}";
+            }
+            catch
+            {
+                // ignore UI errors
             }
         }
 
@@ -646,6 +768,7 @@ namespace EntityFramework
         }
 
         // C#
+
         private void BtnRefreshStats_Click(object sender, EventArgs e)
         {
             try
@@ -705,6 +828,7 @@ namespace EntityFramework
         }
 
         // Replace the placeholder MainTabControl_SelectedIndexChanged with this implementation
+
         private void MainTabControl_SelectedIndexChanged(object sender, EventArgs e)
         {
             // When user navigates to the Parameters tab, reload values from DB (keeps UI in sync)
@@ -720,6 +844,7 @@ namespace EntityFramework
         }
 
         // Add this method to Form1 to fix CS0103
+
         private void ConfigureGridColumns()
         {
             // Clear any auto-generated columns
@@ -800,6 +925,7 @@ namespace EntityFramework
         }
 
         // Add this method to Form1 to fix CS0103
+
         private void ItemList_DataBindingComplete(object? sender, DataGridViewBindingCompleteEventArgs e)
         {
             // Optionally, clear selection after data binding to avoid auto-selecting the first row
@@ -807,6 +933,7 @@ namespace EntityFramework
         }
 
         // Add this method to Form1 to fix CS0103
+
         private void SearchTextBox_TextChanged(object? sender, EventArgs e)
         {
             // Apply filter to users list based on search text
@@ -816,6 +943,7 @@ namespace EntityFramework
         // ---- New helper implementations to resolve missing references ----
 
         // Called when editCheckBox changes; wires up SetEditMode
+
         private void editCheckBox_CheckedChanged(object? sender, EventArgs e)
         {
             try
@@ -830,6 +958,7 @@ namespace EntityFramework
         }
 
         // Enable/disable create/update/delete buttons (minimal implementation)
+
         private void SetEditMode(bool enabled)
         {
             try
@@ -840,18 +969,22 @@ namespace EntityFramework
                 if (deleteBtn != null) deleteBtn.Enabled = enabled;
 
                 // All TextBox inputs across tabs (defensive null checks)
+                // NOTE: intentionally exclude searchTextBox so it remains usable at all times.
                 var textBoxes = new TextBox[]
                 {
                     nameTextBox, addressTextBox,
                     textBox1, textBox2, textBox3, textBox4, textBox5, textBox6, textBox7,
-                    weightTextBox, searchTextBox,
-                    txtCompanyName, txtCompanyAddressPhone, txtPricePerLiter, txtPortion
+                    weightTextBox,
+                    txtCompanyName, txtCompanyAddress, txtCompanyPhone, txtPricePerLiter, txtPortion
                 };
 
                 foreach (var tb in textBoxes)
                 {
                     if (tb != null) tb.Enabled = enabled;
                 }
+
+                // Ensure search box is always enabled
+                if (searchTextBox != null) searchTextBox.Enabled = true;
 
                 // Parameter save button
                 if (btnSaveParameters != null) btnSaveParameters.Enabled = enabled;
@@ -863,6 +996,7 @@ namespace EntityFramework
         }
 
         // Simple filter implementation: filter by name or phone containing the search text (case-insensitive)
+
         private void ApplyFilter(string filter)
         {
             try
@@ -893,6 +1027,7 @@ namespace EntityFramework
         }
 
         // Small utility to format decimals "smartly" similar to other formatters used in the file
+
         private static string FormatDecimalSmart(decimal value)
         {
             var culture = CultureInfo.CurrentCulture;
@@ -902,10 +1037,19 @@ namespace EntityFramework
         }
 
         // Designer-referenced event stubs (no-op or minimal) to stop CS0103 from Designer wires
-        private void label3_Click(object? sender, EventArgs e) { }
-        private void Poids_Click(object? sender, EventArgs e) { }
-        private void weightTextBox_TextChanged(object? sender, EventArgs e) { }
-        private void label9_Click(object? sender, EventArgs e) { }
+
+        private void label3_Click(object? sender, EventArgs e)         {
+        }
+
+        private void Poids_Click(object? sender, EventArgs e)         {
+        }
+
+        private void weightTextBox_TextChanged(object? sender, EventArgs e)         {
+        }
+
+        private void label9_Click(object? sender, EventArgs e)         {
+        }
+
         private void clearBtn_Click(object? sender, EventArgs e)
         {
             // Clear form fields and selection
@@ -925,7 +1069,8 @@ namespace EntityFramework
                     var p = new Parameters
                     {
                         CompanyName = txtCompanyName?.Text ?? string.Empty,
-                        CompanyAddressPhone = txtCompanyAddressPhone?.Text ?? string.Empty,
+                        CompanyAddress = txtCompanyAddress?.Text ?? string.Empty,
+                        CompanyPhone = txtCompanyPhone?.Text ?? string.Empty,
                         DefaultUnitPrice = TryParseDecimal(txtPricePerLiter?.Text, out decimal tmpPrice) ? tmpPrice : 0m,
                         DefaultPortion = TryParseDecimal(txtPortion?.Text, out decimal tmpPortion) ? tmpPortion : 0m
                     };
@@ -936,7 +1081,8 @@ namespace EntityFramework
                     // update single row convention id = 1
                     var parameters = context.Parameters.FirstOrDefault(p => p.Id == 1) ?? new Parameters();
                     parameters.CompanyName = txtCompanyName?.Text ?? string.Empty;
-                    parameters.CompanyAddressPhone = txtCompanyAddressPhone?.Text ?? string.Empty;
+                    parameters.CompanyAddress = txtCompanyAddress?.Text ?? string.Empty;
+                    parameters.CompanyPhone = txtCompanyPhone?.Text ?? string.Empty;
                     if (TryParseDecimal(txtPricePerLiter?.Text, out decimal price)) parameters.DefaultUnitPrice = price;
                     if (TryParseDecimal(txtPortion?.Text, out decimal portion)) parameters.DefaultPortion = portion;
 
@@ -945,6 +1091,10 @@ namespace EntityFramework
                 }
 
                 context.SaveChanges();
+
+                // Refresh UI (including the window title) from persisted parameters
+                LoadParameters();
+
                 MessageBox.Show("Paramètres sauvegardés.", "OK", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 ParametersCheckBox.Checked = false;
             }
@@ -956,12 +1106,10 @@ namespace EntityFramework
 
         private void checkBox1_CheckedChanged_1(object sender, EventArgs e)
         {
-
         }
 
         // Called when the ParametersCheckBox in the Parameters tab is toggled.
         // Enables/disables parameter inputs and the save button; when enabling, reloads values.
-  
 
         private void ParametersCheckBox_CheckedChanged(object sender, EventArgs e)
         {
@@ -974,7 +1122,8 @@ namespace EntityFramework
                     enabled = ParametersCheckBox?.Checked ?? false;
 
                 if (txtCompanyName != null) txtCompanyName.Enabled = enabled;
-                if (txtCompanyAddressPhone != null) txtCompanyAddressPhone.Enabled = enabled;
+                if (txtCompanyAddress != null) txtCompanyAddress.Enabled = enabled;
+                if (txtCompanyPhone != null) txtCompanyPhone.Enabled = enabled;
                 if (txtPricePerLiter != null) txtPricePerLiter.Enabled = enabled;
                 if (txtPortion != null) txtPortion.Enabled = enabled;
                 if (btnSaveParameters != null) btnSaveParameters.Enabled = enabled;
@@ -993,5 +1142,74 @@ namespace EntityFramework
         }
 
         // -----------------------------------------------------------------
+
+        // Populate textBox5 (unit price) from Parameters table when the field is empty.
+        // This helps pre-fill the unit price for new user entries.
+
+        private void PopulateDefaultUnitPrice()
+        {
+            try
+            {
+                if (textBox5 == null) return;
+
+                // Only populate when empty to avoid overwriting user input or selected user values
+                if (!string.IsNullOrWhiteSpace(textBox5.Text)) return;
+
+                using var context = new DataContext();
+                if (context.Parameters == null) return;
+
+                var parameters = context.Parameters.FirstOrDefault(p => p.Id == 1);
+                if (parameters == null) return;
+
+                if (parameters.DefaultUnitPrice != 0m)
+                {
+                    textBox5.Text = parameters.DefaultUnitPrice.ToString(CultureInfo.CurrentCulture);
+                }
+            }
+            catch
+            {
+                // ignore DB errors here — this is a convenience helper
+            }
+        }
+
+        // Recalculate AmountDue = UnitPrice * PayedLiters and update textBox7 live.
+
+        private void PriceOrPaidLiters_TextChanged(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (textBox5 == null || textBox6 == null || textBox7 == null) return;
+
+                if (!TryParseDecimal(textBox5.Text, out decimal unitPrice))
+                {
+                    // if unit price unparsable, clear amount (avoid misleading 0)
+                    textBox7.Text = string.Empty;
+                    return;
+                }
+
+                if (!TryParseInt(textBox6.Text, out int? payedLitersNullable))
+                {
+                    textBox7.Text = string.Empty;
+                    return;
+                }
+
+                var payed = payedLitersNullable ?? 0;
+                var amount = payed * unitPrice;
+
+                textBox7.Text = amount != 0m ? FormatDecimalSmart(amount) : string.Empty;
+            }
+            catch
+            {
+                // swallow UI errors
+            }
+        }
+
+        private void lblCompanyAddressPhone_Click(object sender, EventArgs e)
+        {
+        }
+
+        private void txtCompanyAddressPhone_TextChanged(object sender, EventArgs e)
+        {
+        }
     }
 }

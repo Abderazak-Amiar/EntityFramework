@@ -28,7 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
-            DataGridViewCellStyle dataGridViewCellStyle2 = new DataGridViewCellStyle();
+            DataGridViewCellStyle dataGridViewCellStyle1 = new DataGridViewCellStyle();
             ItemList = new DataGridView();
             editCheckBox = new CheckBox();
             label1 = new Label();
@@ -60,10 +60,12 @@
             mainTabControl = new TabControl();
             tabClients = new TabPage();
             tabParameters = new TabPage();
+            txtCompanyPhone = new TextBox();
+            label10 = new Label();
             lblCompanyName = new Label();
             txtCompanyName = new TextBox();
             lblCompanyAddressPhone = new Label();
-            txtCompanyAddressPhone = new TextBox();
+            txtCompanyAddress = new TextBox();
             lblPricePerLiter = new Label();
             txtPricePerLiter = new TextBox();
             lblPortion = new Label();
@@ -338,7 +340,6 @@
             // 
             // searchTextBox
             // 
-            searchTextBox.Enabled = false;
             searchTextBox.Location = new Point(100, 13);
             searchTextBox.Name = "searchTextBox";
             searchTextBox.Size = new Size(150, 23);
@@ -407,10 +408,12 @@
             // 
             // tabParameters
             // 
+            tabParameters.Controls.Add(txtCompanyPhone);
+            tabParameters.Controls.Add(label10);
             tabParameters.Controls.Add(lblCompanyName);
             tabParameters.Controls.Add(txtCompanyName);
             tabParameters.Controls.Add(lblCompanyAddressPhone);
-            tabParameters.Controls.Add(txtCompanyAddressPhone);
+            tabParameters.Controls.Add(txtCompanyAddress);
             tabParameters.Controls.Add(lblPricePerLiter);
             tabParameters.Controls.Add(txtPricePerLiter);
             tabParameters.Controls.Add(lblPortion);
@@ -424,6 +427,22 @@
             tabParameters.TabIndex = 1;
             tabParameters.Text = "Paramètres";
             tabParameters.UseVisualStyleBackColor = true;
+            // 
+            // txtCompanyPhone
+            // 
+            txtCompanyPhone.Location = new Point(160, 110);
+            txtCompanyPhone.Name = "txtCompanyPhone";
+            txtCompanyPhone.Size = new Size(98, 23);
+            txtCompanyPhone.TabIndex = 11;
+            // 
+            // label10
+            // 
+            label10.AutoSize = true;
+            label10.Location = new Point(24, 110);
+            label10.Name = "label10";
+            label10.Size = new Size(61, 15);
+            label10.TabIndex = 10;
+            label10.Text = "Téléphone";
             // 
             // lblCompanyName
             // 
@@ -445,24 +464,26 @@
             // lblCompanyAddressPhone
             // 
             lblCompanyAddressPhone.AutoSize = true;
-            lblCompanyAddressPhone.Location = new Point(24, 81);
+            lblCompanyAddressPhone.Location = new Point(24, 80);
             lblCompanyAddressPhone.Name = "lblCompanyAddressPhone";
-            lblCompanyAddressPhone.Size = new Size(105, 15);
+            lblCompanyAddressPhone.Size = new Size(48, 15);
             lblCompanyAddressPhone.TabIndex = 2;
-            lblCompanyAddressPhone.Text = "Adresse Téléphone";
+            lblCompanyAddressPhone.Text = "Adresse";
+            lblCompanyAddressPhone.Click += lblCompanyAddressPhone_Click;
             // 
-            // txtCompanyAddressPhone
+            // txtCompanyAddress
             // 
-            txtCompanyAddressPhone.Enabled = false;
-            txtCompanyAddressPhone.Location = new Point(160, 77);
-            txtCompanyAddressPhone.Name = "txtCompanyAddressPhone";
-            txtCompanyAddressPhone.Size = new Size(360, 23);
-            txtCompanyAddressPhone.TabIndex = 3;
+            txtCompanyAddress.Enabled = false;
+            txtCompanyAddress.Location = new Point(160, 77);
+            txtCompanyAddress.Name = "txtCompanyAddress";
+            txtCompanyAddress.Size = new Size(360, 23);
+            txtCompanyAddress.TabIndex = 3;
+            txtCompanyAddress.TextChanged += txtCompanyAddressPhone_TextChanged;
             // 
             // lblPricePerLiter
             // 
             lblPricePerLiter.AutoSize = true;
-            lblPricePerLiter.Location = new Point(24, 117);
+            lblPricePerLiter.Location = new Point(24, 147);
             lblPricePerLiter.Name = "lblPricePerLiter";
             lblPricePerLiter.Size = new Size(38, 15);
             lblPricePerLiter.TabIndex = 4;
@@ -471,7 +492,7 @@
             // txtPricePerLiter
             // 
             txtPricePerLiter.Enabled = false;
-            txtPricePerLiter.Location = new Point(160, 113);
+            txtPricePerLiter.Location = new Point(160, 143);
             txtPricePerLiter.Name = "txtPricePerLiter";
             txtPricePerLiter.Size = new Size(100, 23);
             txtPricePerLiter.TabIndex = 5;
@@ -479,7 +500,7 @@
             // lblPortion
             // 
             lblPortion.AutoSize = true;
-            lblPortion.Location = new Point(24, 153);
+            lblPortion.Location = new Point(24, 183);
             lblPortion.Name = "lblPortion";
             lblPortion.Size = new Size(46, 15);
             lblPortion.TabIndex = 6;
@@ -488,7 +509,7 @@
             // txtPortion
             // 
             txtPortion.Enabled = false;
-            txtPortion.Location = new Point(160, 149);
+            txtPortion.Location = new Point(160, 179);
             txtPortion.Name = "txtPortion";
             txtPortion.Size = new Size(100, 23);
             txtPortion.TabIndex = 7;
@@ -496,7 +517,7 @@
             // btnSaveParameters
             // 
             btnSaveParameters.Enabled = false;
-            btnSaveParameters.Location = new Point(24, 189);
+            btnSaveParameters.Location = new Point(24, 219);
             btnSaveParameters.Name = "btnSaveParameters";
             btnSaveParameters.Size = new Size(120, 27);
             btnSaveParameters.TabIndex = 8;
@@ -550,14 +571,14 @@
             dgvStats.AllowUserToAddRows = false;
             dgvStats.AllowUserToDeleteRows = false;
             dgvStats.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-            dataGridViewCellStyle2.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            dataGridViewCellStyle2.BackColor = SystemColors.Control;
-            dataGridViewCellStyle2.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-            dataGridViewCellStyle2.ForeColor = SystemColors.WindowText;
-            dataGridViewCellStyle2.SelectionBackColor = SystemColors.Highlight;
-            dataGridViewCellStyle2.SelectionForeColor = SystemColors.HighlightText;
-            dataGridViewCellStyle2.WrapMode = DataGridViewTriState.True;
-            dgvStats.ColumnHeadersDefaultCellStyle = dataGridViewCellStyle2;
+            dataGridViewCellStyle1.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dataGridViewCellStyle1.BackColor = SystemColors.Control;
+            dataGridViewCellStyle1.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            dataGridViewCellStyle1.ForeColor = SystemColors.WindowText;
+            dataGridViewCellStyle1.SelectionBackColor = SystemColors.Highlight;
+            dataGridViewCellStyle1.SelectionForeColor = SystemColors.HighlightText;
+            dataGridViewCellStyle1.WrapMode = DataGridViewTriState.True;
+            dgvStats.ColumnHeadersDefaultCellStyle = dataGridViewCellStyle1;
             dgvStats.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             dgvStats.Columns.AddRange(new DataGridViewColumn[] { colMetric, colValue });
             dgvStats.EnableHeadersVisualStyles = false;
@@ -640,7 +661,7 @@
         private Label lblCompanyName;
         private TextBox txtCompanyName;
         private Label lblCompanyAddressPhone;
-        private TextBox txtCompanyAddressPhone;
+        private TextBox txtCompanyAddress;
         private Label lblPricePerLiter;
         private TextBox txtPricePerLiter;
         private Label lblPortion;
@@ -658,5 +679,7 @@
         private DataGridView dgvStats;
         private DataGridViewTextBoxColumn colMetric;
         private DataGridViewTextBoxColumn colValue;
+        private TextBox txtCompanyPhone;
+        private Label label10;
     }
 }

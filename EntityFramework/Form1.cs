@@ -1,5 +1,6 @@
 namespace EntityFramework
 {
+    using Microsoft.EntityFrameworkCore;
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
@@ -69,6 +70,9 @@ namespace EntityFramework
 
             // Load data automatically on startup
             RefreshUsers();
+
+            // Populate parameters inputs from DB
+            LoadParameters();
         }
 
         private void RefreshUsers()
@@ -186,6 +190,7 @@ namespace EntityFramework
 
                     context.SaveChanges();
                     MessageBox.Show("Utilisateur mis à jour avec succès");
+                    editCheckBox.Checked = false;
                 }
                 else
                 {
@@ -263,6 +268,7 @@ namespace EntityFramework
 
             // Refresh list
             RefreshUsers();
+            editCheckBox.Checked = false;
         }
 
         private void readBtn_Click(object sender, EventArgs e)
@@ -308,6 +314,7 @@ namespace EntityFramework
             MessageBox.Show("Utilisateur supprimé avec succès");
             // Refresh the list
             RefreshUsers();
+            editCheckBox.Checked = false;
         }
 
         private void textBox1_TextChanged(object sender, EventArgs e)
@@ -585,179 +592,406 @@ namespace EntityFramework
         {
         }
 
-        // Add this method to the Form1 class (near other private helpers)
+        // Add this method to Form1 (near other private helpers)
+        private void LoadParameters()
+        {
+            try
+            {
+                using var context = new DataContext();
 
+                if (context.Parameters == null)
+                {
+                    // No parameters table available yet — clear inputs
+                    txtCompanyName.Text = string.Empty;
+                    txtCompanyAddressPhone.Text = string.Empty;
+                    txtPricePerLiter.Text = string.Empty;
+                    txtPortion.Text = string.Empty;
+                    return;
+                }
+
+                // Use single-row convention id = 1
+                var parameters = context.Parameters.FirstOrDefault(p => p.Id == 1) ?? new Parameters();
+
+                txtCompanyName.Text = parameters.CompanyName ?? string.Empty;
+                txtCompanyAddressPhone.Text = parameters.CompanyAddressPhone ?? string.Empty;
+
+                // Show decimal values using current culture; TryParseDecimal already accepts both cultures on save.
+                txtPricePerLiter.Text = parameters.DefaultUnitPrice != 0m
+                    ? parameters.DefaultUnitPrice.ToString(System.Globalization.CultureInfo.CurrentCulture)
+                    : string.Empty;
+
+                txtPortion.Text = parameters.DefaultPortion != 0m
+                    ? parameters.DefaultPortion.ToString(System.Globalization.CultureInfo.CurrentCulture)
+                    : string.Empty;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Échec du chargement des paramètres : " + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void configureBtn_Click(object sender, EventArgs e)
+        {
+            // Switch to the Parameters tab in the new tab control.
+            // Defensive null checks avoid crashes if designer wasn't fully initialized.
+            try
+            {
+                if (mainTabControl != null && tabParameters != null)
+                    mainTabControl.SelectedTab = tabParameters;
+            }
+            catch
+            {
+                // swallow — not critical; LoadParameters is called when tab is selected anyway
+            }
+        }
+
+        // C#
+        private void BtnRefreshStats_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // Query DB directly to ensure up-to-date numbers
+                using var context = new DataContext();
+                var users = context.Users?.ToList() ?? new List<User>();
+
+                // Totals requested
+                var totalClients = users.Count;
+                var totalSacs = users.Sum(u => u.NbrBags);                     // Sacs entrée (decimal)
+                var totalPoids = users.Sum(u => u.Weight ?? 0m);               // Poids (decimal)
+                var totalLitresProduites = users.Sum(u => u.NbrLiters ?? 0);   // Litres produites (int)
+                var totalLitresVendues = users.Sum(u => u.PayedLiters ?? 0);   // Nombre Litres vendues (int)
+
+                // "Profit de litres vendues" interpreted as revenue from sold liters:
+                // sum(payedLiters * unitPriceLiter) per user
+                var totalRevenueFromPaidLiters = users.Sum(u => (u.PayedLiters ?? 0) * (u.UnitPriceLiter ?? 0m));
+
+                // Keep existing debt-related stats for the UI
+                var totalAmountDue = users.Sum(u => u.AmountDue ?? 0m);
+                var averageDue = totalClients > 0 ? users.Average(u => (u.AmountDue ?? 0m)) : 0m;
+
+                // Format and update UI
+                var ci = CultureInfo.GetCultureInfo("fr-FR");
+
+                // Ensure dgvStats exists
+                if (dgvStats != null)
+                {
+                    dgvStats.Rows.Clear();
+
+                    // Helper inline formatter to match existing "smart" formatting style
+                    static string FormatDecimalSmartForLabel(decimal value, CultureInfo culture)
+                    {
+                        return decimal.Truncate(value) == value
+                            ? value.ToString("N0", culture)
+                            : value.ToString("N1", culture);
+                    }
+
+                    dgvStats.Rows.Add("Total Clients", totalClients.ToString("N0", ci));
+                    dgvStats.Rows.Add("Sacs entrée", FormatDecimalSmartForLabel(totalSacs, ci));
+                    dgvStats.Rows.Add("Poids", FormatDecimalSmartForLabel(totalPoids, ci));
+                    dgvStats.Rows.Add("Litres produites", totalLitresProduites.ToString("N0", ci));
+                    dgvStats.Rows.Add("Nombre Litres vendues", totalLitresVendues.ToString("N0", ci));
+                    dgvStats.Rows.Add("Recette (litres vendues)", totalRevenueFromPaidLiters.ToString("N2", ci));
+                    dgvStats.Rows.Add("Total dû (clients)", totalAmountDue.ToString("N2", ci));
+                    dgvStats.Rows.Add("Moyenne dû", averageDue.ToString("N2", ci));
+                }
+
+                // Update the short summary label as before (keeps backward compatibility)
+                lblStatsSummary.Text = $"Utilisateurs: {totalClients}, Total dû: {totalAmountDue.ToString("N2", ci)}";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Échec du chargement des statistiques : " + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        // Replace the placeholder MainTabControl_SelectedIndexChanged with this implementation
+        private void MainTabControl_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            // When user navigates to the Parameters tab, reload values from DB (keeps UI in sync)
+            try
+            {
+                if (mainTabControl.SelectedTab == tabParameters)
+                    LoadParameters();
+            }
+            catch
+            {
+                // swallow — LoadParameters already shows errors if needed
+            }
+        }
+
+        // Add this method to Form1 to fix CS0103
         private void ConfigureGridColumns()
         {
-            // Do not auto-generate columns; we create them with French headers
+            // Clear any auto-generated columns
             ItemList.AutoGenerateColumns = false;
             ItemList.Columns.Clear();
-                
-            // Ensure header style is applied: disable visual styles and set a bold header font
-            ItemList.EnableHeadersVisualStyles = false;
-            ItemList.ColumnHeadersDefaultCellStyle.Font = new Font(ItemList.Font, FontStyle.Bold);
 
-            void AddColumn(string propertyName, string headerText, string? format = null)
+            // Add columns for User properties (adjust as needed for your User model)
+            ItemList.Columns.Add(new DataGridViewTextBoxColumn
             {
-                var col = new DataGridViewTextBoxColumn
-                {
-                    DataPropertyName = propertyName,
-                    Name = propertyName,
-                    HeaderText = headerText,
-                    ReadOnly = true,
-                    AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
-                };
-                if (!string.IsNullOrEmpty(format))
-                    col.DefaultCellStyle.Format = format;
-                ItemList.Columns.Add(col);
-            }
-
-            AddColumn("Id", "N°");
-            AddColumn("Name", "Nom");
-            AddColumn("Phone", "Téléphone");
-            AddColumn("Address", "Adresse");
-
-            // Prefer display/formatted string columns so we control fraction display
-            AddColumn("DisplayNbrBags", "Nbr Sacs");      // binds to User.DisplayNbrBags (string)
-            AddColumn("NbrContainers", "Nbr Bidons");
-            AddColumn("DisplayWeight", "Poids");          // binds to User.DisplayWeight (string)
-            AddColumn("NbrLiters", "Litres");
-            AddColumn("PayedLiters", "Litres payés");
-            AddColumn("DisplayAmountDue", "Montant dû"); // binds to User.DisplayAmountDue (string)
+                DataPropertyName = "Name",
+                HeaderText = "Nom",
+                Name = "colName",
+                ReadOnly = true
+            });
+            ItemList.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = "Phone",
+                HeaderText = "Téléphone",
+                Name = "colPhone",
+                ReadOnly = true
+            });
+            ItemList.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = "Address",
+                HeaderText = "Adresse",
+                Name = "colAddress",
+                ReadOnly = true
+            });
+            ItemList.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = "NbrBags",
+                HeaderText = "Sacs",
+                Name = "colNbrBags",
+                ReadOnly = true
+            });
+            ItemList.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = "NbrContainers",
+                HeaderText = "Conteneurs",
+                Name = "colNbrContainers",
+                ReadOnly = true
+            });
+            ItemList.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = "NbrLiters",
+                HeaderText = "Litres",
+                Name = "colNbrLiters",
+                ReadOnly = true
+            });
+            ItemList.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = "UnitPriceLiter",
+                HeaderText = "Prix/Litre",
+                Name = "colUnitPriceLiter",
+                ReadOnly = true
+            });
+            ItemList.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = "PayedLiters",
+                HeaderText = "Litres Payés",
+                Name = "colPayedLiters",
+                ReadOnly = true
+            });
+            ItemList.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = "AmountDue",
+                HeaderText = "Montant Dû",
+                Name = "colAmountDue",
+                ReadOnly = true
+            });
+            ItemList.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = "Weight",
+                HeaderText = "Poids",
+                Name = "colWeight",
+                ReadOnly = true
+            });
         }
 
-        private void Poids_Click(object sender, EventArgs e)
+        // Add this method to Form1 to fix CS0103
+        private void ItemList_DataBindingComplete(object? sender, DataGridViewBindingCompleteEventArgs e)
         {
+            // Optionally, clear selection after data binding to avoid auto-selecting the first row
+            ClearGridSelection();
         }
 
-        private void label3_Click(object sender, EventArgs e)
-        {
-        }
-
-        private void weightTextBox_TextChanged(object sender, EventArgs e)
-        {
-        }
-
-        private void label9_Click(object sender, EventArgs e)
-        {
-        }
-
+        // Add this method to Form1 to fix CS0103
         private void SearchTextBox_TextChanged(object? sender, EventArgs e)
         {
+            // Apply filter to users list based on search text
             ApplyFilter(searchTextBox?.Text ?? string.Empty);
         }
 
-        private void ApplyFilter(string searchTerm)
-        {
-            // When changing DataSource we don't want intermediate selection changes to populate fields.
-            suppressSelectionEvents = true;
-            try
-            {
-                if (string.IsNullOrWhiteSpace(searchTerm))
-                {
-                    usersBinding.DataSource = DatabaseUsers;
-                }
-                else
-                {
-                    var term = searchTerm.Trim();
-                    var filtered = DatabaseUsers
-                        // Match against Name, Phone, or Address
-                        .Where(u => (!string.IsNullOrEmpty(u.Name) && u.Name.IndexOf(term, StringComparison.CurrentCultureIgnoreCase) >= 0) ||
-                                    (!string.IsNullOrEmpty(u.Phone) && u.Phone.IndexOf(term, StringComparison.CurrentCultureIgnoreCase) >= 0) ||
-                                    (!string.IsNullOrEmpty(u.Address) && u.Address.IndexOf(term, StringComparison.CurrentCultureIgnoreCase) >= 0))
-                        .ToList();
-                    usersBinding.DataSource = filtered;
-                }
-            }
-            finally
-            {
-                suppressSelectionEvents = false;
-            }
+        // ---- New helper implementations to resolve missing references ----
 
-            // keep no current item after filter so form inputs remain empty until user selects a row
-            ClearGridSelection();
-        }
-
+        // Called when editCheckBox changes; wires up SetEditMode
         private void editCheckBox_CheckedChanged(object? sender, EventArgs e)
         {
-            // If the control isn't present (designer not created yet) do nothing.
-            if (editCheckBox == null) return;
-
-            // Enable/disable form controls and buttons based on the checkbox state.
-            SetEditMode(editCheckBox.Checked);
+            try
+            {
+                if (editCheckBox != null)
+                    SetEditMode(editCheckBox.Checked);
+            }
+            catch
+            {
+                // swallow UI errors
+            }
         }
 
-        // Add this method to the Form1 class to fix CS0103
-
+        // Enable/disable create/update/delete buttons (minimal implementation)
         private void SetEditMode(bool enabled)
         {
-            // Example logic: enable/disable form fields based on edit mode
-            nameTextBox.Enabled = enabled;
-            textBox1.Enabled = enabled;
-            addressTextBox.Enabled = enabled;
-            textBox2.Enabled = enabled;
-            textBox3.Enabled = enabled;
-            textBox4.Enabled = enabled;
-            textBox5.Enabled = enabled;
-            textBox6.Enabled = enabled;
-            textBox7.Enabled = enabled;
-            weightTextBox.Enabled = enabled;
+            try
+            {
+                // Buttons
+                if (createBtn != null) createBtn.Enabled = enabled;
+                if (updateBtn != null) updateBtn.Enabled = enabled;
+                if (deleteBtn != null) deleteBtn.Enabled = enabled;
 
-            // CRUD buttons enabled only in edit mode
-            updateBtn.Enabled = enabled;
-            createBtn.Enabled = enabled;
-            deleteBtn.Enabled = enabled;
+                // All TextBox inputs across tabs (defensive null checks)
+                var textBoxes = new TextBox[]
+                {
+                    nameTextBox, addressTextBox,
+                    textBox1, textBox2, textBox3, textBox4, textBox5, textBox6, textBox7,
+                    weightTextBox, searchTextBox,
+                    txtCompanyName, txtCompanyAddressPhone, txtPricePerLiter, txtPortion
+                };
 
-            // Print always available
-            printBtn.Enabled = true;
+                foreach (var tb in textBoxes)
+                {
+                    if (tb != null) tb.Enabled = enabled;
+                }
 
-            // Keep grid read-only to avoid inline edits; form controls handle edits
-            ItemList.ReadOnly = true;
+                // Parameter save button
+                if (btnSaveParameters != null) btnSaveParameters.Enabled = enabled;
+            }
+            catch
+            {
+                // ignore UI errors
+            }
         }
 
-        // Add this helper near other private helpers in Form1 class
+        // Simple filter implementation: filter by name or phone containing the search text (case-insensitive)
+        private void ApplyFilter(string filter)
+        {
+            try
+            {
+                var normalized = (filter ?? string.Empty).Trim();
+                IEnumerable<User> list = DatabaseUsers ?? new List<User>();
 
+                if (!string.IsNullOrEmpty(normalized))
+                {
+                    list = list.Where(u =>
+                        (!string.IsNullOrEmpty(u.Name) && u.Name.IndexOf(normalized, StringComparison.CurrentCultureIgnoreCase) >= 0)
+                        || (!string.IsNullOrEmpty(u.Phone) && u.Phone.IndexOf(normalized, StringComparison.CurrentCultureIgnoreCase) >= 0));
+                }
+
+                // Update binding source - use a concrete list to avoid deferred execution issues
+                usersBinding.DataSource = list.ToList();
+
+                // Update autocomplete source if desired (kept disabled by default but method remains)
+                UpdateAutoCompleteSource();
+
+                // After applying filter, clear selection so inputs don't auto-populate
+                ClearGridSelection();
+            }
+            catch
+            {
+                // ignore filter errors for robustness
+            }
+        }
+
+        // Small utility to format decimals "smartly" similar to other formatters used in the file
         private static string FormatDecimalSmart(decimal value)
         {
-            var ci = CultureInfo.CurrentCulture;
+            var culture = CultureInfo.CurrentCulture;
             return decimal.Truncate(value) == value
-                ? value.ToString("N0", ci)   // no decimals when fractional part is zero
-                : value.ToString("N1", ci);  // one decimal otherwise
+                ? value.ToString("N0", culture)
+                : value.ToString("N1", culture);
         }
 
-        private void clearBtn_Click(object sender, EventArgs e)
+        // Designer-referenced event stubs (no-op or minimal) to stop CS0103 from Designer wires
+        private void label3_Click(object? sender, EventArgs e) { }
+        private void Poids_Click(object? sender, EventArgs e) { }
+        private void weightTextBox_TextChanged(object? sender, EventArgs e) { }
+        private void label9_Click(object? sender, EventArgs e) { }
+        private void clearBtn_Click(object? sender, EventArgs e)
         {
-            // Clear all input fields
+            // Clear form fields and selection
             ClearFormFields();
-
-            // Remove any selection in the grid so inputs remain empty until user selects a row
             ClearGridSelection();
         }
 
-        // add this new handler to the Form1 class
-
-        private void ItemList_DataBindingComplete(object? sender, DataGridViewBindingCompleteEventArgs e)
+        private void BtnSaveParameters_Click(object? sender, EventArgs e)
         {
-            // Prevent the selection-change handler from reacting while we clear selection
-            suppressSelectionEvents = true;
             try
             {
-                // Ensure no current item in the BindingSource and no current cell in grid
-                usersBinding.Position = -1;
-                ItemList.ClearSelection();
-                try { ItemList.CurrentCell = null; } catch { }
+                using var context = new DataContext();
 
-                // Move focus away from grid so it doesn't appear selected.
-                // Prefer the search box if present.
-                if (searchTextBox != null && searchTextBox.CanFocus)
-                    searchTextBox.Focus();
+                if (context.Parameters == null)
+                {
+                    // create new parameters row if table exists but no row
+                    var p = new Parameters
+                    {
+                        CompanyName = txtCompanyName?.Text ?? string.Empty,
+                        CompanyAddressPhone = txtCompanyAddressPhone?.Text ?? string.Empty,
+                        DefaultUnitPrice = TryParseDecimal(txtPricePerLiter?.Text, out decimal tmpPrice) ? tmpPrice : 0m,
+                        DefaultPortion = TryParseDecimal(txtPortion?.Text, out decimal tmpPortion) ? tmpPortion : 0m
+                    };
+                    context.Parameters?.Add(p);
+                }
                 else
-                    this.ActiveControl = searchTextBox != null ? searchTextBox : this;
+                {
+                    // update single row convention id = 1
+                    var parameters = context.Parameters.FirstOrDefault(p => p.Id == 1) ?? new Parameters();
+                    parameters.CompanyName = txtCompanyName?.Text ?? string.Empty;
+                    parameters.CompanyAddressPhone = txtCompanyAddressPhone?.Text ?? string.Empty;
+                    if (TryParseDecimal(txtPricePerLiter?.Text, out decimal price)) parameters.DefaultUnitPrice = price;
+                    if (TryParseDecimal(txtPortion?.Text, out decimal portion)) parameters.DefaultPortion = portion;
+
+                    if (parameters.Id == 0)
+                        context.Parameters.Add(parameters);
+                }
+
+                context.SaveChanges();
+                MessageBox.Show("Paramètres sauvegardés.", "OK", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ParametersCheckBox.Checked = false;
             }
-            finally
+            catch (Exception ex)
             {
-                suppressSelectionEvents = false;
+                MessageBox.Show("Échec de la sauvegarde des paramètres : " + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+        private void checkBox1_CheckedChanged_1(object sender, EventArgs e)
+        {
+
+        }
+
+        // Called when the ParametersCheckBox in the Parameters tab is toggled.
+        // Enables/disables parameter inputs and the save button; when enabling, reloads values.
+  
+
+        private void ParametersCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            try
+            {
+                bool enabled;
+                if (sender is CheckBox cb)
+                    enabled = cb.Checked;
+                else
+                    enabled = ParametersCheckBox?.Checked ?? false;
+
+                if (txtCompanyName != null) txtCompanyName.Enabled = enabled;
+                if (txtCompanyAddressPhone != null) txtCompanyAddressPhone.Enabled = enabled;
+                if (txtPricePerLiter != null) txtPricePerLiter.Enabled = enabled;
+                if (txtPortion != null) txtPortion.Enabled = enabled;
+                if (btnSaveParameters != null) btnSaveParameters.Enabled = enabled;
+
+                if (enabled)
+                {
+                    // Refresh values from DB when entering edit mode
+                    LoadParameters();
+                    txtCompanyName?.Focus();
+                }
+            }
+            catch
+            {
+                // Swallow UI errors to avoid unexpected crashes
+            }
+        }
+
+        // -----------------------------------------------------------------
     }
 }

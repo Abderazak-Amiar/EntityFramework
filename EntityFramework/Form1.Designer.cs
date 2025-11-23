@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            DataGridViewCellStyle dataGridViewCellStyle2 = new DataGridViewCellStyle();
             ItemList = new DataGridView();
             editCheckBox = new CheckBox();
             label1 = new Label();
@@ -51,12 +52,36 @@
             textBox6 = new TextBox();
             label8 = new Label();
             textBox7 = new TextBox();
-            Poids = new Label();
-            weightTextBox = new TextBox();
             label9 = new Label();
+            weightTextBox = new TextBox();
+            Poids = new Label();
             searchTextBox = new TextBox();
             clearBtn = new Button();
+            mainTabControl = new TabControl();
+            tabClients = new TabPage();
+            tabParameters = new TabPage();
+            lblCompanyName = new Label();
+            txtCompanyName = new TextBox();
+            lblCompanyAddressPhone = new Label();
+            txtCompanyAddressPhone = new TextBox();
+            lblPricePerLiter = new Label();
+            txtPricePerLiter = new TextBox();
+            lblPortion = new Label();
+            txtPortion = new TextBox();
+            btnSaveParameters = new Button();
+            ParametersCheckBox = new CheckBox();
+            tabStatistics = new TabPage();
+            lblStatsSummary = new Label();
+            btnRefreshStats = new Button();
+            dgvStats = new DataGridView();
+            colMetric = new DataGridViewTextBoxColumn();
+            colValue = new DataGridViewTextBoxColumn();
             ((System.ComponentModel.ISupportInitialize)ItemList).BeginInit();
+            mainTabControl.SuspendLayout();
+            tabClients.SuspendLayout();
+            tabParameters.SuspendLayout();
+            tabStatistics.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)dgvStats).BeginInit();
             SuspendLayout();
             // 
             // ItemList
@@ -80,7 +105,7 @@
             editCheckBox.TabIndex = 1;
             editCheckBox.Text = "Editer";
             editCheckBox.UseVisualStyleBackColor = true;
-            editCheckBox.CheckedChanged += checkBox1_CheckedChanged;
+            editCheckBox.CheckedChanged += editCheckBox_CheckedChanged;
             // 
             // label1
             // 
@@ -104,6 +129,7 @@
             // 
             // nameTextBox
             // 
+            nameTextBox.Enabled = false;
             nameTextBox.Location = new Point(100, 432);
             nameTextBox.Name = "nameTextBox";
             nameTextBox.Size = new Size(150, 23);
@@ -112,6 +138,7 @@
             // 
             // addressTextBox
             // 
+            addressTextBox.Enabled = false;
             addressTextBox.Location = new Point(100, 461);
             addressTextBox.Name = "addressTextBox";
             addressTextBox.Size = new Size(150, 23);
@@ -120,6 +147,7 @@
             // 
             // createBtn
             // 
+            createBtn.Enabled = false;
             createBtn.Location = new Point(104, 561);
             createBtn.Name = "createBtn";
             createBtn.Size = new Size(75, 23);
@@ -130,6 +158,7 @@
             // 
             // updateBtn
             // 
+            updateBtn.Enabled = false;
             updateBtn.Location = new Point(202, 561);
             updateBtn.Name = "updateBtn";
             updateBtn.Size = new Size(75, 23);
@@ -140,6 +169,7 @@
             // 
             // deleteBtn
             // 
+            deleteBtn.Enabled = false;
             deleteBtn.Location = new Point(300, 561);
             deleteBtn.Name = "deleteBtn";
             deleteBtn.Size = new Size(75, 23);
@@ -180,6 +210,7 @@
             // 
             // textBox1
             // 
+            textBox1.Enabled = false;
             textBox1.Location = new Point(331, 432);
             textBox1.Name = "textBox1";
             textBox1.Size = new Size(150, 23);
@@ -188,6 +219,7 @@
             // 
             // textBox2
             // 
+            textBox2.Enabled = false;
             textBox2.Location = new Point(331, 461);
             textBox2.Name = "textBox2";
             textBox2.Size = new Size(150, 23);
@@ -195,6 +227,7 @@
             // 
             // textBox3
             // 
+            textBox3.Enabled = false;
             textBox3.Location = new Point(579, 429);
             textBox3.Name = "textBox3";
             textBox3.Size = new Size(150, 23);
@@ -202,6 +235,7 @@
             // 
             // textBox4
             // 
+            textBox4.Enabled = false;
             textBox4.Location = new Point(579, 458);
             textBox4.Name = "textBox4";
             textBox4.Size = new Size(150, 23);
@@ -238,6 +272,7 @@
             // 
             // textBox5
             // 
+            textBox5.Enabled = false;
             textBox5.Location = new Point(331, 490);
             textBox5.Name = "textBox5";
             textBox5.PlaceholderText = "Prix uinitaire";
@@ -246,6 +281,7 @@
             // 
             // textBox6
             // 
+            textBox6.Enabled = false;
             textBox6.Location = new Point(417, 490);
             textBox6.Name = "textBox6";
             textBox6.PlaceholderText = "Litres";
@@ -265,28 +301,11 @@
             // 
             // textBox7
             // 
+            textBox7.Enabled = false;
             textBox7.Location = new Point(579, 488);
             textBox7.Name = "textBox7";
             textBox7.Size = new Size(150, 23);
             textBox7.TabIndex = 23;
-            // 
-            // Poids
-            // 
-            Poids.AutoSize = true;
-            Poids.Location = new Point(30, 496);
-            Poids.Name = "Poids";
-            Poids.Size = new Size(36, 15);
-            Poids.TabIndex = 24;
-            Poids.Text = "Poids";
-            Poids.Click += Poids_Click;
-            // 
-            // weightTextBox
-            // 
-            weightTextBox.Location = new Point(100, 490);
-            weightTextBox.Name = "weightTextBox";
-            weightTextBox.Size = new Size(150, 23);
-            weightTextBox.TabIndex = 25;
-            weightTextBox.TextChanged += weightTextBox_TextChanged;
             // 
             // label9
             // 
@@ -298,8 +317,28 @@
             label9.Text = "Recherche";
             label9.Click += label9_Click;
             // 
+            // weightTextBox
+            // 
+            weightTextBox.Enabled = false;
+            weightTextBox.Location = new Point(100, 490);
+            weightTextBox.Name = "weightTextBox";
+            weightTextBox.Size = new Size(150, 23);
+            weightTextBox.TabIndex = 25;
+            weightTextBox.TextChanged += weightTextBox_TextChanged;
+            // 
+            // Poids
+            // 
+            Poids.AutoSize = true;
+            Poids.Location = new Point(30, 496);
+            Poids.Name = "Poids";
+            Poids.Size = new Size(36, 15);
+            Poids.TabIndex = 24;
+            Poids.Text = "Poids";
+            Poids.Click += Poids_Click;
+            // 
             // searchTextBox
             // 
+            searchTextBox.Enabled = false;
             searchTextBox.Location = new Point(100, 13);
             searchTextBox.Name = "searchTextBox";
             searchTextBox.Size = new Size(150, 23);
@@ -316,45 +355,248 @@
             clearBtn.UseVisualStyleBackColor = true;
             clearBtn.Click += clearBtn_Click;
             // 
+            // mainTabControl
+            // 
+            mainTabControl.Controls.Add(tabClients);
+            mainTabControl.Controls.Add(tabParameters);
+            mainTabControl.Controls.Add(tabStatistics);
+            mainTabControl.Location = new Point(12, 12);
+            mainTabControl.Name = "mainTabControl";
+            mainTabControl.SelectedIndex = 0;
+            mainTabControl.Size = new Size(1160, 737);
+            mainTabControl.TabIndex = 0;
+            mainTabControl.SelectedIndexChanged += MainTabControl_SelectedIndexChanged;
+            // 
+            // tabClients
+            // 
+            tabClients.Controls.Add(clearBtn);
+            tabClients.Controls.Add(searchTextBox);
+            tabClients.Controls.Add(label9);
+            tabClients.Controls.Add(weightTextBox);
+            tabClients.Controls.Add(Poids);
+            tabClients.Controls.Add(textBox7);
+            tabClients.Controls.Add(label8);
+            tabClients.Controls.Add(textBox6);
+            tabClients.Controls.Add(textBox5);
+            tabClients.Controls.Add(label7);
+            tabClients.Controls.Add(label6);
+            tabClients.Controls.Add(label5);
+            tabClients.Controls.Add(textBox4);
+            tabClients.Controls.Add(textBox3);
+            tabClients.Controls.Add(textBox2);
+            tabClients.Controls.Add(textBox1);
+            tabClients.Controls.Add(label4);
+            tabClients.Controls.Add(label3);
+            tabClients.Controls.Add(printBtn);
+            tabClients.Controls.Add(deleteBtn);
+            tabClients.Controls.Add(updateBtn);
+            tabClients.Controls.Add(createBtn);
+            tabClients.Controls.Add(addressTextBox);
+            tabClients.Controls.Add(nameTextBox);
+            tabClients.Controls.Add(label2);
+            tabClients.Controls.Add(label1);
+            tabClients.Controls.Add(editCheckBox);
+            tabClients.Controls.Add(ItemList);
+            tabClients.Location = new Point(4, 24);
+            tabClients.Name = "tabClients";
+            tabClients.Padding = new Padding(3);
+            tabClients.Size = new Size(1152, 709);
+            tabClients.TabIndex = 0;
+            tabClients.Text = "Clients";
+            tabClients.UseVisualStyleBackColor = true;
+            // 
+            // tabParameters
+            // 
+            tabParameters.Controls.Add(lblCompanyName);
+            tabParameters.Controls.Add(txtCompanyName);
+            tabParameters.Controls.Add(lblCompanyAddressPhone);
+            tabParameters.Controls.Add(txtCompanyAddressPhone);
+            tabParameters.Controls.Add(lblPricePerLiter);
+            tabParameters.Controls.Add(txtPricePerLiter);
+            tabParameters.Controls.Add(lblPortion);
+            tabParameters.Controls.Add(txtPortion);
+            tabParameters.Controls.Add(btnSaveParameters);
+            tabParameters.Controls.Add(ParametersCheckBox);
+            tabParameters.Location = new Point(4, 24);
+            tabParameters.Name = "tabParameters";
+            tabParameters.Padding = new Padding(3);
+            tabParameters.Size = new Size(1152, 709);
+            tabParameters.TabIndex = 1;
+            tabParameters.Text = "Paramètres";
+            tabParameters.UseVisualStyleBackColor = true;
+            // 
+            // lblCompanyName
+            // 
+            lblCompanyName.AutoSize = true;
+            lblCompanyName.Location = new Point(24, 45);
+            lblCompanyName.Name = "lblCompanyName";
+            lblCompanyName.Size = new Size(89, 15);
+            lblCompanyName.TabIndex = 0;
+            lblCompanyName.Text = "Nom entreprise";
+            // 
+            // txtCompanyName
+            // 
+            txtCompanyName.Enabled = false;
+            txtCompanyName.Location = new Point(160, 41);
+            txtCompanyName.Name = "txtCompanyName";
+            txtCompanyName.Size = new Size(360, 23);
+            txtCompanyName.TabIndex = 1;
+            // 
+            // lblCompanyAddressPhone
+            // 
+            lblCompanyAddressPhone.AutoSize = true;
+            lblCompanyAddressPhone.Location = new Point(24, 81);
+            lblCompanyAddressPhone.Name = "lblCompanyAddressPhone";
+            lblCompanyAddressPhone.Size = new Size(105, 15);
+            lblCompanyAddressPhone.TabIndex = 2;
+            lblCompanyAddressPhone.Text = "Adresse Téléphone";
+            // 
+            // txtCompanyAddressPhone
+            // 
+            txtCompanyAddressPhone.Enabled = false;
+            txtCompanyAddressPhone.Location = new Point(160, 77);
+            txtCompanyAddressPhone.Name = "txtCompanyAddressPhone";
+            txtCompanyAddressPhone.Size = new Size(360, 23);
+            txtCompanyAddressPhone.TabIndex = 3;
+            // 
+            // lblPricePerLiter
+            // 
+            lblPricePerLiter.AutoSize = true;
+            lblPricePerLiter.Location = new Point(24, 117);
+            lblPricePerLiter.Name = "lblPricePerLiter";
+            lblPricePerLiter.Size = new Size(38, 15);
+            lblPricePerLiter.TabIndex = 4;
+            lblPricePerLiter.Text = "Prix/L";
+            // 
+            // txtPricePerLiter
+            // 
+            txtPricePerLiter.Enabled = false;
+            txtPricePerLiter.Location = new Point(160, 113);
+            txtPricePerLiter.Name = "txtPricePerLiter";
+            txtPricePerLiter.Size = new Size(100, 23);
+            txtPricePerLiter.TabIndex = 5;
+            // 
+            // lblPortion
+            // 
+            lblPortion.AutoSize = true;
+            lblPortion.Location = new Point(24, 153);
+            lblPortion.Name = "lblPortion";
+            lblPortion.Size = new Size(46, 15);
+            lblPortion.TabIndex = 6;
+            lblPortion.Text = "Portion";
+            // 
+            // txtPortion
+            // 
+            txtPortion.Enabled = false;
+            txtPortion.Location = new Point(160, 149);
+            txtPortion.Name = "txtPortion";
+            txtPortion.Size = new Size(100, 23);
+            txtPortion.TabIndex = 7;
+            // 
+            // btnSaveParameters
+            // 
+            btnSaveParameters.Enabled = false;
+            btnSaveParameters.Location = new Point(24, 189);
+            btnSaveParameters.Name = "btnSaveParameters";
+            btnSaveParameters.Size = new Size(120, 27);
+            btnSaveParameters.TabIndex = 8;
+            btnSaveParameters.Text = "Enregistrer";
+            btnSaveParameters.Click += BtnSaveParameters_Click;
+            // 
+            // ParametersCheckBox
+            // 
+            ParametersCheckBox.AutoSize = true;
+            ParametersCheckBox.Location = new Point(28, 10);
+            ParametersCheckBox.Name = "ParametersCheckBox";
+            ParametersCheckBox.Size = new Size(56, 19);
+            ParametersCheckBox.TabIndex = 9;
+            ParametersCheckBox.Text = "Editer";
+            ParametersCheckBox.UseVisualStyleBackColor = true;
+            ParametersCheckBox.CheckedChanged += ParametersCheckBox_CheckedChanged;
+            // 
+            // tabStatistics
+            // 
+            tabStatistics.Controls.Add(lblStatsSummary);
+            tabStatistics.Controls.Add(btnRefreshStats);
+            tabStatistics.Controls.Add(dgvStats);
+            tabStatistics.Location = new Point(4, 24);
+            tabStatistics.Name = "tabStatistics";
+            tabStatistics.Padding = new Padding(3);
+            tabStatistics.Size = new Size(1152, 709);
+            tabStatistics.TabIndex = 2;
+            tabStatistics.Text = "Statistiques";
+            tabStatistics.UseVisualStyleBackColor = true;
+            // 
+            // lblStatsSummary
+            // 
+            lblStatsSummary.AutoSize = true;
+            lblStatsSummary.Location = new Point(24, 24);
+            lblStatsSummary.Name = "lblStatsSummary";
+            lblStatsSummary.Size = new Size(166, 15);
+            lblStatsSummary.TabIndex = 0;
+            lblStatsSummary.Text = "Statistiques : (aucune donnée)";
+            // 
+            // btnRefreshStats
+            // 
+            btnRefreshStats.Location = new Point(24, 56);
+            btnRefreshStats.Name = "btnRefreshStats";
+            btnRefreshStats.Size = new Size(100, 27);
+            btnRefreshStats.TabIndex = 1;
+            btnRefreshStats.Text = "Rafraîchir";
+            btnRefreshStats.Click += BtnRefreshStats_Click;
+            // 
+            // dgvStats
+            // 
+            dgvStats.AllowUserToAddRows = false;
+            dgvStats.AllowUserToDeleteRows = false;
+            dgvStats.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dataGridViewCellStyle2.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            dataGridViewCellStyle2.BackColor = SystemColors.Control;
+            dataGridViewCellStyle2.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            dataGridViewCellStyle2.ForeColor = SystemColors.WindowText;
+            dataGridViewCellStyle2.SelectionBackColor = SystemColors.Highlight;
+            dataGridViewCellStyle2.SelectionForeColor = SystemColors.HighlightText;
+            dataGridViewCellStyle2.WrapMode = DataGridViewTriState.True;
+            dgvStats.ColumnHeadersDefaultCellStyle = dataGridViewCellStyle2;
+            dgvStats.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvStats.Columns.AddRange(new DataGridViewColumn[] { colMetric, colValue });
+            dgvStats.EnableHeadersVisualStyles = false;
+            dgvStats.Location = new Point(24, 96);
+            dgvStats.Name = "dgvStats";
+            dgvStats.ReadOnly = true;
+            dgvStats.RowHeadersVisible = false;
+            dgvStats.Size = new Size(700, 260);
+            dgvStats.TabIndex = 2;
+            // 
+            // colMetric
+            // 
+            colMetric.Name = "colMetric";
+            colMetric.ReadOnly = true;
+            // 
+            // colValue
+            // 
+            colValue.Name = "colValue";
+            colValue.ReadOnly = true;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1184, 761);
-            Controls.Add(clearBtn);
-            Controls.Add(searchTextBox);
-            Controls.Add(label9);
-            Controls.Add(weightTextBox);
-            Controls.Add(Poids);
-            Controls.Add(textBox7);
-            Controls.Add(label8);
-            Controls.Add(textBox6);
-            Controls.Add(textBox5);
-            Controls.Add(label7);
-            Controls.Add(label6);
-            Controls.Add(label5);
-            Controls.Add(textBox4);
-            Controls.Add(textBox3);
-            Controls.Add(textBox2);
-            Controls.Add(textBox1);
-            Controls.Add(label4);
-            Controls.Add(label3);
-            Controls.Add(printBtn);
-            Controls.Add(deleteBtn);
-            Controls.Add(updateBtn);
-            Controls.Add(createBtn);
-            Controls.Add(addressTextBox);
-            Controls.Add(nameTextBox);
-            Controls.Add(label2);
-            Controls.Add(label1);
-            Controls.Add(editCheckBox);
-            Controls.Add(ItemList);
+            Controls.Add(mainTabControl);
             Name = "Form1";
             Text = "GESTION CLIENTS - HUILERIE BELABBAS ";
             Load += Form1_Load;
             ((System.ComponentModel.ISupportInitialize)ItemList).EndInit();
+            mainTabControl.ResumeLayout(false);
+            tabClients.ResumeLayout(false);
+            tabClients.PerformLayout();
+            tabParameters.ResumeLayout(false);
+            tabParameters.PerformLayout();
+            tabStatistics.ResumeLayout(false);
+            tabStatistics.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)dgvStats).EndInit();
             ResumeLayout(false);
-            PerformLayout();
         }
 
         #endregion
@@ -387,5 +629,34 @@
         private Label label9;
         private TextBox searchTextBox;
         private Button clearBtn;
+
+        // New fields (tabs)
+        private TabControl mainTabControl;
+        private TabPage tabClients;
+        private TabPage tabParameters;
+        private TabPage tabStatistics;
+
+        // Parameters tab controls (requested)
+        private Label lblCompanyName;
+        private TextBox txtCompanyName;
+        private Label lblCompanyAddressPhone;
+        private TextBox txtCompanyAddressPhone;
+        private Label lblPricePerLiter;
+        private TextBox txtPricePerLiter;
+        private Label lblPortion;
+        private TextBox txtPortion;
+        private Button btnSaveParameters;
+
+        // <-- New checkbox added for enabling/disabling parameter inputs -->
+        private CheckBox ParametersCheckBox;
+
+        // Statistics tab controls
+        private Label lblStatsSummary;
+        private Button btnRefreshStats;
+
+        // NEW: statistics grid
+        private DataGridView dgvStats;
+        private DataGridViewTextBoxColumn colMetric;
+        private DataGridViewTextBoxColumn colValue;
     }
 }

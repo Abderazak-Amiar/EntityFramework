@@ -18,6 +18,9 @@
 
         public DbSet<User>? Users { get; set; }
 
+        // Add Parameters DbSet so application settings can be persisted
+        public DbSet<Parameters>? Parameters { get; set; }
+
         // call this from SaveChanges / SaveChangesAsync to persist formatted strings
 
         private void UpdateDisplayFields()

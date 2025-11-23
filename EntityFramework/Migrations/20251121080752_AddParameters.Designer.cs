@@ -3,6 +3,7 @@ using System;
 using EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace EntityFramework.Migrations
 {
     [DbContext(typeof(DataContext))]
-    partial class DataContextModelSnapshot : ModelSnapshot
+    [Migration("20251121080752_AddParameters")]
+    partial class AddParameters
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.22");
@@ -23,22 +26,29 @@ namespace EntityFramework.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("CompanyAddressPhone")
-                        .HasMaxLength(500)
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("CompanyName")
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
-                    b.Property<decimal>("DefaultPortion")
+                    b.Property<string>("CultureName")
+                        .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
                     b.Property<decimal>("DefaultUnitPrice")
                         .HasColumnType("TEXT");
 
+                    b.Property<decimal>("DefaultWeightUnit")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PrinterName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("UseSilentPrinting")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 

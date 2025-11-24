@@ -82,10 +82,8 @@ namespace EntityFramework
             string? PayedLitersText = (user.PayedLiters.HasValue && user.PayedLiters.Value != 0) ? user.PayedLiters.Value.ToString(fr) : null;
             string? AmountDueText = (user.AmountDue.HasValue && user.AmountDue.Value != 0m) ? FormatDecimalSmart(user.AmountDue.Value, fr) : null;
 
-            // Read company parameters safely: only read the explicit columns we expect.
-            string? companyName = null;
-            string? companyAddress = null;
-            string? companyPhone = null;
+            // Default portion fraction read from Parameters (0..1). If missing, remains 0.
+            decimal defaultPortionFraction = 0m;
             try
             {
                 using var ctx = new DataContext();
@@ -104,6 +102,7 @@ namespace EntityFramework
                     if (cols.Contains("CompanyName")) selectCols.Add("CompanyName");
                     if (cols.Contains("CompanyAddress")) selectCols.Add("CompanyAddress");
                     if (cols.Contains("CompanyPhone")) selectCols.Add("CompanyPhone");
+                    if (cols.Contains("DefaultPortion")) selectCols.Add("DefaultPortion");
 
                     if (selectCols.Count > 0)
                     {
@@ -112,12 +111,19 @@ namespace EntityFramework
                         using var r2 = selectCmd.ExecuteReader();
                         if (r2.Read())
                         {
-                            if (selectCols.Contains("CompanyName") && !r2.IsDBNull(r2.GetOrdinal("CompanyName")))
-                                companyName = r2.GetString(r2.GetOrdinal("CompanyName")).Trim();
-                            if (selectCols.Contains("CompanyAddress") && !r2.IsDBNull(r2.GetOrdinal("CompanyAddress")))
-                                companyAddress = r2.GetString(r2.GetOrdinal("CompanyAddress")).Trim();
-                            if (selectCols.Contains("CompanyPhone") && !r2.IsDBNull(r2.GetOrdinal("CompanyPhone")))
-                                companyPhone = r2.GetString(r2.GetOrdinal("CompanyPhone")).Trim();
+                            if (selectCols.Contains("DefaultPortion") && !r2.IsDBNull(r2.GetOrdinal("DefaultPortion")))
+                            {
+                                try
+                                {
+                                    // SQLite may return double; convert safely to decimal.
+                                    var val = r2.GetValue(r2.GetOrdinal("DefaultPortion"));
+                                    defaultPortionFraction = Convert.ToDecimal(val);
+                                }
+                                catch
+                                {
+                                    defaultPortionFraction = 0m;
+                                }
+                            }
                         }
                     }
                 }
@@ -127,6 +133,25 @@ namespace EntityFramework
             catch (Exception ex)
             {
                 Debug.WriteLine("QuestPDF: failed reading Parameters safely: " + ex.Message);
+            }
+
+            // If DefaultPortion is stored as fraction 0..1, compute portion liters and delivered liters:
+            string? PortionLitersText = null;
+            string? DeliveredLitersText = null;
+            if (user.NbrLiters.HasValue && user.NbrLiters.Value != 0)
+            {
+                var totalLiters = (decimal)user.NbrLiters.Value;
+
+                if (defaultPortionFraction > 0m)
+                {
+                    var portionLiters = defaultPortionFraction * totalLiters;
+                    // Delivered = produced - portion
+                    var deliveredLiters = totalLiters - portionLiters;
+                    if (deliveredLiters < 0m) deliveredLiters = 0m;
+
+                    PortionLitersText = FormatDecimalSmart(portionLiters, fr);
+                    DeliveredLitersText = FormatDecimalSmart(deliveredLiters, fr);
+                }
             }
 
             return Document.Create(container =>
@@ -204,22 +229,30 @@ namespace EntityFramework
                         }
 
                         // Company info (from Parameters) — shown above the ticket title when available
-                        if (!string.IsNullOrWhiteSpace(companyName))
+                        // We attempt to read company fields above; re-open a small safe read for company display if still needed.
+                        try
                         {
-                            col.Item().Text(companyName).FontSize(11).Bold().AlignCenter();
+                            using var ctx = new DataContext();
+                            var parameters = ctx.Parameters?.FirstOrDefault(p => p.Id == 1);
+                            if (parameters != null)
+                            {
+                                if (!string.IsNullOrWhiteSpace(parameters.CompanyName))
+                                    col.Item().Text(parameters.CompanyName).FontSize(11).Bold().AlignCenter();
+
+                                if (!string.IsNullOrWhiteSpace(parameters.CompanyAddress))
+                                    col.Item().Text(parameters.CompanyAddress).FontSize(9).AlignCenter();
+
+                                if (!string.IsNullOrWhiteSpace(parameters.CompanyPhone))
+                                    col.Item().Text(parameters.CompanyPhone).FontSize(9).AlignCenter();
+                            }
+                        }
+                        catch
+                        {
+                            // swallow - we already logged earlier
                         }
 
-                        if (!string.IsNullOrWhiteSpace(companyAddress))
-                        {
-                            col.Item().Text(companyAddress).FontSize(9).AlignCenter();
-                        }
-
-                        if (!string.IsNullOrWhiteSpace(companyPhone))
-                        {
-                            col.Item().Text(companyPhone).FontSize(9).AlignCenter();
-                        }
-
-                        col.Item().Text("Ticket").FontSize(14).Bold().AlignCenter();
+                        // Add a top margin before the "Ticket" title to increase spacing from the header
+                        col.Item().PaddingTop(10).Text("Ticket").FontSize(14).Bold().AlignCenter();
                         col.Item().PaddingVertical(4).LineHorizontal(1);
                     });
 
@@ -257,7 +290,17 @@ namespace EntityFramework
                                 AddRow("Sacs", NbrBagsText);
                                 AddRow("Bidons", NbrContainersText);
                                 AddRow("Poids", WeightText);
-                                AddRow("Litres", NbrLitersText);
+
+                                // Quantité(L)
+                                AddRow("Quantité(L)", NbrLitersText);
+
+                                // If "Montant dû" is empty and we have a portion, include Portion and Q.Livrée (produced - portion)
+                                if (string.IsNullOrWhiteSpace(AmountDueText) && !string.IsNullOrWhiteSpace(PortionLitersText) && !string.IsNullOrWhiteSpace(DeliveredLitersText))
+                                {
+                                    AddRow("Portion(L)", $"{PortionLitersText}");
+                                    AddRow("Q.Livrée(L)", $"{DeliveredLitersText}");
+                                }
+
                                 AddRow("Prix/L", UnitPriceText);
                                 AddRow("Litres payés", PayedLitersText);
                                 AddRow("Montant dû", AmountDueText);

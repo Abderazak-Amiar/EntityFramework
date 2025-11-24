@@ -205,15 +205,15 @@
             label4.AutoSize = true;
             label4.Location = new Point(259, 465);
             label4.Name = "label4";
-            label4.Size = new Size(53, 15);
+            label4.Size = new Size(30, 15);
             label4.TabIndex = 12;
-            label4.Text = "Nbr Sacs";
+            label4.Text = "Sacs";
             label4.Click += label4_Click;
             // 
             // textBox1
             // 
             textBox1.Enabled = false;
-            textBox1.Location = new Point(331, 432);
+            textBox1.Location = new Point(339, 432);
             textBox1.Name = "textBox1";
             textBox1.Size = new Size(150, 23);
             textBox1.TabIndex = 13;
@@ -222,7 +222,7 @@
             // textBox2
             // 
             textBox2.Enabled = false;
-            textBox2.Location = new Point(331, 461);
+            textBox2.Location = new Point(339, 461);
             textBox2.Name = "textBox2";
             textBox2.Size = new Size(150, 23);
             textBox2.TabIndex = 14;
@@ -230,7 +230,7 @@
             // textBox3
             // 
             textBox3.Enabled = false;
-            textBox3.Location = new Point(579, 429);
+            textBox3.Location = new Point(587, 429);
             textBox3.Name = "textBox3";
             textBox3.Size = new Size(150, 23);
             textBox3.TabIndex = 15;
@@ -238,7 +238,7 @@
             // textBox4
             // 
             textBox4.Enabled = false;
-            textBox4.Location = new Point(579, 458);
+            textBox4.Location = new Point(587, 458);
             textBox4.Name = "textBox4";
             textBox4.Size = new Size(150, 23);
             textBox4.TabIndex = 16;
@@ -246,21 +246,21 @@
             // label5
             // 
             label5.AutoSize = true;
-            label5.Location = new Point(507, 433);
+            label5.Location = new Point(515, 433);
             label5.Name = "label5";
-            label5.Size = new Size(66, 15);
+            label5.Size = new Size(43, 15);
             label5.TabIndex = 17;
-            label5.Text = "Nbr Bidons";
+            label5.Text = "Bidons";
             label5.Click += label5_Click;
             // 
             // label6
             // 
             label6.AutoSize = true;
-            label6.Location = new Point(507, 463);
+            label6.Location = new Point(515, 463);
             label6.Name = "label6";
-            label6.Size = new Size(35, 15);
+            label6.Size = new Size(67, 15);
             label6.TabIndex = 18;
-            label6.Text = "Litres";
+            label6.Text = "Quantité(L)";
             label6.Click += label6_Click;
             // 
             // label7
@@ -268,14 +268,14 @@
             label7.AutoSize = true;
             label7.Location = new Point(258, 494);
             label7.Name = "label7";
-            label7.Size = new Size(67, 15);
+            label7.Size = new Size(76, 15);
             label7.TabIndex = 19;
-            label7.Text = "Net à Payer";
+            label7.Text = "Litres à payer";
             // 
             // textBox5
             // 
             textBox5.Enabled = false;
-            textBox5.Location = new Point(331, 490);
+            textBox5.Location = new Point(339, 490);
             textBox5.Name = "textBox5";
             textBox5.PlaceholderText = "Prix uinitaire";
             textBox5.Size = new Size(80, 23);
@@ -284,7 +284,7 @@
             // textBox6
             // 
             textBox6.Enabled = false;
-            textBox6.Location = new Point(417, 490);
+            textBox6.Location = new Point(425, 490);
             textBox6.Name = "textBox6";
             textBox6.PlaceholderText = "Litres";
             textBox6.Size = new Size(64, 23);
@@ -294,7 +294,7 @@
             // label8
             // 
             label8.AutoSize = true;
-            label8.Location = new Point(507, 493);
+            label8.Location = new Point(515, 493);
             label8.Name = "label8";
             label8.Size = new Size(32, 15);
             label8.TabIndex = 22;
@@ -304,7 +304,7 @@
             // textBox7
             // 
             textBox7.Enabled = false;
-            textBox7.Location = new Point(579, 488);
+            textBox7.Location = new Point(587, 488);
             textBox7.Name = "textBox7";
             textBox7.Size = new Size(150, 23);
             textBox7.TabIndex = 23;
@@ -502,9 +502,10 @@
             lblPortion.AutoSize = true;
             lblPortion.Location = new Point(24, 183);
             lblPortion.Name = "lblPortion";
-            lblPortion.Size = new Size(46, 15);
+            lblPortion.Size = new Size(64, 15);
             lblPortion.TabIndex = 6;
-            lblPortion.Text = "Portion";
+            lblPortion.Text = "Portion(%)";
+            lblPortion.Click += lblPortion_Click;
             // 
             // txtPortion
             // 

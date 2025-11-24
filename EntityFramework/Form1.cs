@@ -18,6 +18,9 @@ namespace EntityFramework
 
         private bool suppressSelectionEvents;
 
+        // Replaces previous bool suppressPortionApply;
+        private bool suppressPortionApply;
+
         public List<User> DatabaseUsers { get; private set; } = new List<User>();
 
         public Form1()
@@ -87,6 +90,24 @@ namespace EntityFramework
                 {
                     textBox6.TextChanged -= PriceOrPaidLiters_TextChanged;
                     textBox6.TextChanged += PriceOrPaidLiters_TextChanged;
+                }
+
+                // Ensure txtPortion validates/clamps on leaving the control
+                if (txtPortion != null)
+                {
+                    txtPortion.Leave -= TxtPortion_Leave;
+                    txtPortion.Leave += TxtPortion_Leave;
+
+                    // live update when portion changes
+                    txtPortion.TextChanged -= TxtPortion_TextChanged;
+                    txtPortion.TextChanged += TxtPortion_TextChanged;
+                }
+
+                // Recalculate when the source quantity changes (textBox4 holds NbrLiters)
+                if (textBox4 != null)
+                {
+                    textBox4.TextChanged -= TextBox4_TextChanged;
+                    textBox4.TextChanged += TextBox4_TextChanged;
                 }
 
                 // Populate unit price input with default (if available and empty)
@@ -679,36 +700,30 @@ namespace EntityFramework
 
                 if (context.Parameters == null)
                 {
-                    // No parameters table available yet — clear inputs
                     txtCompanyName.Text = string.Empty;
                     txtCompanyAddress.Text = string.Empty;
                     txtCompanyPhone.Text = string.Empty;
                     txtPricePerLiter.Text = string.Empty;
                     txtPortion.Text = string.Empty;
-
-                    // Update window title with placeholder when no table
                     SetWindowTitle(null);
                     return;
                 }
 
-                // Use single-row convention id = 1
                 var parameters = context.Parameters.FirstOrDefault(p => p.Id == 1) ?? new Parameters();
 
                 txtCompanyName.Text = parameters.CompanyName ?? string.Empty;
                 txtCompanyAddress.Text = parameters.CompanyAddress ?? string.Empty;
                 txtCompanyPhone.Text = parameters.CompanyPhone ?? string.Empty;
 
-                // Show decimal values using current culture; TryParseDecimal already accepts both cultures on save.
                 txtPricePerLiter.Text = parameters.DefaultUnitPrice != 0m
                     ? parameters.DefaultUnitPrice.ToString(System.Globalization.CultureInfo.CurrentCulture)
                     : string.Empty;
 
+                // Show portion as percentage (0..100) in the UI
                 txtPortion.Text = parameters.DefaultPortion != 0m
-                    ? parameters.DefaultPortion.ToString(System.Globalization.CultureInfo.CurrentCulture)
+                    ? (parameters.DefaultPortion * 100m).ToString(System.Globalization.CultureInfo.CurrentCulture)
                     : string.Empty;
 
-                // Update the Form title to "GESTION CLIENTS - {CompanyName}".
-                // When company name is empty, keep the literal "Company Name" as requested.
                 SetWindowTitle(parameters.CompanyName);
             }
             catch (Exception ex)
@@ -847,9 +862,19 @@ namespace EntityFramework
 
         private void ConfigureGridColumns()
         {
+            // Defensive check in case designer hasn't created ItemList
+            if (ItemList == null) return;
+
             // Clear any auto-generated columns
             ItemList.AutoGenerateColumns = false;
             ItemList.Columns.Clear();
+
+            // Ensure header style changes apply (disable visual styles for headers)
+            ItemList.EnableHeadersVisualStyles = false;
+
+            // Make header text bold using the grid's current font as base (fallback to system font)
+            var baseFont = ItemList.Font ?? SystemFonts.DefaultFont;
+            ItemList.ColumnHeadersDefaultCellStyle.Font = new Font(baseFont, FontStyle.Bold);
 
             // Add columns for User properties (adjust as needed for your User model)
             ItemList.Columns.Add(new DataGridViewTextBoxColumn
@@ -883,14 +908,14 @@ namespace EntityFramework
             ItemList.Columns.Add(new DataGridViewTextBoxColumn
             {
                 DataPropertyName = "NbrContainers",
-                HeaderText = "Conteneurs",
+                HeaderText = "Bidons",
                 Name = "colNbrContainers",
                 ReadOnly = true
             });
             ItemList.Columns.Add(new DataGridViewTextBoxColumn
             {
                 DataPropertyName = "NbrLiters",
-                HeaderText = "Litres",
+                HeaderText = "Quantité(L)",
                 Name = "colNbrLiters",
                 ReadOnly = true
             });
@@ -1038,16 +1063,20 @@ namespace EntityFramework
 
         // Designer-referenced event stubs (no-op or minimal) to stop CS0103 from Designer wires
 
-        private void label3_Click(object? sender, EventArgs e)         {
+        private void label3_Click(object? sender, EventArgs e)
+        {
         }
 
-        private void Poids_Click(object? sender, EventArgs e)         {
+        private void Poids_Click(object? sender, EventArgs e)
+        {
         }
 
-        private void weightTextBox_TextChanged(object? sender, EventArgs e)         {
+        private void weightTextBox_TextChanged(object? sender, EventArgs e)
+        {
         }
 
-        private void label9_Click(object? sender, EventArgs e)         {
+        private void label9_Click(object? sender, EventArgs e)
+        {
         }
 
         private void clearBtn_Click(object? sender, EventArgs e)
@@ -1061,30 +1090,53 @@ namespace EntityFramework
         {
             try
             {
+                // Validate txtPortion first: empty => 0, otherwise must parse and be within [0, 100]
+                decimal portionPercent = 0m;
+                if (!string.IsNullOrWhiteSpace(txtPortion?.Text))
+                {
+                    if (!TryParseDecimal(txtPortion.Text, out decimal tmpPortion))
+                    {
+                        MessageBox.Show("La portion doit être un nombre valide (utilisez le format numérique de votre culture).", "Valeur invalide", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        txtPortion?.Focus();
+                        return;
+                    }
+
+                    if (tmpPortion < 0m || tmpPortion > 100m)
+                    {
+                        MessageBox.Show("La portion doit être comprise entre 0 et 100 (pourcentage).", "Valeur hors plage", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        txtPortion?.Focus();
+                        return;
+                    }
+
+                    portionPercent = tmpPortion;
+                }
+
                 using var context = new DataContext();
+
+                // Convert percent (0..100) to stored fraction (0..1)
+                var storedPortion = portionPercent / 100m;
 
                 if (context.Parameters == null)
                 {
-                    // create new parameters row if table exists but no row
                     var p = new Parameters
                     {
                         CompanyName = txtCompanyName?.Text ?? string.Empty,
                         CompanyAddress = txtCompanyAddress?.Text ?? string.Empty,
                         CompanyPhone = txtCompanyPhone?.Text ?? string.Empty,
                         DefaultUnitPrice = TryParseDecimal(txtPricePerLiter?.Text, out decimal tmpPrice) ? tmpPrice : 0m,
-                        DefaultPortion = TryParseDecimal(txtPortion?.Text, out decimal tmpPortion) ? tmpPortion : 0m
+                        DefaultPortion = storedPortion
                     };
                     context.Parameters?.Add(p);
                 }
                 else
                 {
-                    // update single row convention id = 1
                     var parameters = context.Parameters.FirstOrDefault(p => p.Id == 1) ?? new Parameters();
                     parameters.CompanyName = txtCompanyName?.Text ?? string.Empty;
                     parameters.CompanyAddress = txtCompanyAddress?.Text ?? string.Empty;
                     parameters.CompanyPhone = txtCompanyPhone?.Text ?? string.Empty;
                     if (TryParseDecimal(txtPricePerLiter?.Text, out decimal price)) parameters.DefaultUnitPrice = price;
-                    if (TryParseDecimal(txtPortion?.Text, out decimal portion)) parameters.DefaultPortion = portion;
+
+                    parameters.DefaultPortion = storedPortion;
 
                     if (parameters.Id == 0)
                         context.Parameters.Add(parameters);
@@ -1210,6 +1262,108 @@ namespace EntityFramework
 
         private void txtCompanyAddressPhone_TextChanged(object sender, EventArgs e)
         {
+        }
+
+        // New handler: clamp/format portion when leaving the field
+        private void TxtPortion_Leave(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (txtPortion == null) return;
+                var text = txtPortion.Text;
+
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    // empty is treated as 0%
+                    txtPortion.Text = 0m.ToString(CultureInfo.CurrentCulture);
+                    return;
+                }
+
+                if (!TryParseDecimal(text, out decimal parsed))
+                {
+                    MessageBox.Show("La portion doit être un nombre (format courant).", "Valeur invalide", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    txtPortion.Focus();
+                    return;
+                }
+
+                // Clamp to [0, 100] (percentage) and reformat using current culture
+                if (parsed < 0m) parsed = 0m;
+                if (parsed > 100m) parsed = 100m;
+
+                txtPortion.Text = parsed.ToString(CultureInfo.CurrentCulture);
+            }
+            catch
+            {
+                // ignore UI errors
+            }
+        }
+
+        private void lblPortion_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        // New handlers and helper: place these among the other private helpers in Form1
+
+        private void TxtPortion_TextChanged(object? sender, EventArgs e)
+        {
+            ApplyPortionToTextBox6();
+        }
+
+        private void TextBox4_TextChanged(object? sender, EventArgs e)
+        {
+            ApplyPortionToTextBox6();
+        }
+
+        // Compute textBox6 = textBox4 * portion (txtPortion as percent 0..100).
+        // Writes a rounded integer into textBox6 using current culture.
+        private void ApplyPortionToTextBox6()
+        {
+            try
+            {
+                if (suppressPortionApply) return;
+                if (textBox4 == null || textBox6 == null || txtPortion == null) return;
+
+                // Parse source liters (textBox4)
+                if (!TryParseInt(textBox4.Text, out int? litersNullable))
+                {
+                    // if source is not numeric, clear target to avoid stale values
+                    textBox6.Text = string.Empty;
+                    return;
+                }
+
+                var liters = litersNullable ?? 0;
+
+                // Parse portion as percent (0..100)
+                if (!TryParseDecimal(txtPortion.Text, out decimal portionPercent))
+                {
+                    // invalid portion -> do not update
+                    return;
+                }
+
+                // Clamp portion to [0,100]
+                if (portionPercent < 0m) portionPercent = 0m;
+                if (portionPercent > 100m) portionPercent = 100m;
+
+                var fraction = portionPercent / 100m;
+                var adjustedDecimal = liters * fraction;
+                var adjustedInt = (int)Math.Round(adjustedDecimal, MidpointRounding.AwayFromZero);
+
+                // Prevent re-entrancy while updating the target textbox
+                suppressPortionApply = true;
+                try
+                {
+                    textBox6.Text = adjustedInt.ToString(CultureInfo.CurrentCulture);
+                }
+                finally
+                {
+                    suppressPortionApply = false;
+                }
+            }
+            catch
+            {
+                // swallow UI errors
+            }
         }
     }
 }

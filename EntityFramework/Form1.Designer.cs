@@ -73,11 +73,11 @@
             btnSaveParameters = new Button();
             ParametersCheckBox = new CheckBox();
             tabStatistics = new TabPage();
-            lblStatsSummary = new Label();
             btnRefreshStats = new Button();
             dgvStats = new DataGridView();
             colMetric = new DataGridViewTextBoxColumn();
             colValue = new DataGridViewTextBoxColumn();
+            yearComboBox = new ComboBox();
             ((System.ComponentModel.ISupportInitialize)ItemList).BeginInit();
             mainTabControl.SuspendLayout();
             tabClients.SuspendLayout();
@@ -352,7 +352,7 @@
             clearBtn.Name = "clearBtn";
             clearBtn.Size = new Size(75, 23);
             clearBtn.TabIndex = 28;
-            clearBtn.Text = "Refresher";
+            clearBtn.Text = "Rafraîchir";
             clearBtn.UseVisualStyleBackColor = true;
             clearBtn.Click += clearBtn_Click;
             // 
@@ -538,7 +538,7 @@
             // 
             // tabStatistics
             // 
-            tabStatistics.Controls.Add(lblStatsSummary);
+            tabStatistics.Controls.Add(yearComboBox);
             tabStatistics.Controls.Add(btnRefreshStats);
             tabStatistics.Controls.Add(dgvStats);
             tabStatistics.Location = new Point(4, 24);
@@ -548,15 +548,6 @@
             tabStatistics.TabIndex = 2;
             tabStatistics.Text = "Statistiques";
             tabStatistics.UseVisualStyleBackColor = true;
-            // 
-            // lblStatsSummary
-            // 
-            lblStatsSummary.AutoSize = true;
-            lblStatsSummary.Location = new Point(24, 24);
-            lblStatsSummary.Name = "lblStatsSummary";
-            lblStatsSummary.Size = new Size(166, 15);
-            lblStatsSummary.TabIndex = 0;
-            lblStatsSummary.Text = "Statistiques : (aucune donnée)";
             // 
             // btnRefreshStats
             // 
@@ -592,13 +583,23 @@
             // 
             // colMetric
             // 
+            colMetric.HeaderText = "Métrique";
             colMetric.Name = "colMetric";
             colMetric.ReadOnly = true;
             // 
             // colValue
             // 
+            colValue.HeaderText = "Valeur";
             colValue.Name = "colValue";
             colValue.ReadOnly = true;
+            // 
+            // yearComboBox
+            // 
+            yearComboBox.FormattingEnabled = true;
+            yearComboBox.Location = new Point(24, 14);
+            yearComboBox.Name = "yearComboBox";
+            yearComboBox.Size = new Size(121, 23);
+            yearComboBox.TabIndex = 3;
             // 
             // Form1
             // 
@@ -616,7 +617,6 @@
             tabParameters.ResumeLayout(false);
             tabParameters.PerformLayout();
             tabStatistics.ResumeLayout(false);
-            tabStatistics.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)dgvStats).EndInit();
             ResumeLayout(false);
         }
@@ -673,7 +673,6 @@
         private CheckBox ParametersCheckBox;
 
         // Statistics tab controls
-        private Label lblStatsSummary;
         private Button btnRefreshStats;
 
         // NEW: statistics grid
@@ -682,5 +681,6 @@
         private DataGridViewTextBoxColumn colValue;
         private TextBox txtCompanyPhone;
         private Label label10;
+        private ComboBox yearComboBox;
     }
 }

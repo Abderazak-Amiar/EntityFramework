@@ -117,6 +117,62 @@ namespace EntityFramework
             {
                 // Swallow UI wiring errors
             }
+
+            try
+            {
+                ConfigureStatsGrid();
+
+
+                // Populate lists and stats now that grids are configured
+                RefreshUsers();
+                LoadParameters();
+
+                // Refresh the stats UI immediately
+                BtnRefreshStats_Click(this, EventArgs.Empty);
+            }
+            catch
+            {
+                // swallow UI wiring errors
+            }
+
+            // in Form1_Load (after RefreshUsers/LoadParameters or near UI wiring)
+            try
+            {
+                if (yearComboBox != null)
+                {
+                    yearComboBox.SelectedIndexChanged -= YearComboBox_SelectedIndexChanged;
+                    yearComboBox.Items.Clear();
+                    yearComboBox.Items.Add("All");
+
+                    // populate with distinct years present in DB (defensive)
+                    using var ctx = new DataContext();
+                    var years = ctx.Users?
+                        .Where(u => u.CreatedAt.HasValue)
+                        .Select(u => u.CreatedAt.Value.Year)
+                        .Distinct()
+                        .OrderByDescending(y => y)
+                        .ToList();
+
+                    if (years != null && years.Count > 0)
+                    {
+                        foreach (var y in years) yearComboBox.Items.Add(y.ToString());
+                        yearComboBox.SelectedIndex = 0;
+                    }
+                    else
+                    {
+                        // fallback: add last 5 years
+                        var current = DateTime.Now.Year;
+                        for (int i = 0; i < 5; i++) yearComboBox.Items.Add((current - i).ToString());
+                        yearComboBox.SelectedIndex = 0;
+                    }
+
+                    yearComboBox.SelectedIndexChanged += YearComboBox_SelectedIndexChanged;
+                }
+            }
+            catch
+            {
+                // ignore UI wiring errors
+            }
         }
 
         private void RefreshUsers()
@@ -301,7 +357,8 @@ namespace EntityFramework
                     UnitPriceLiter = unitPrice,
                     PayedLiters = payedLitersNullable,
                     AmountDue = amountDue,
-                    Weight = weightNullable
+                    Weight = weightNullable,
+                    CreatedAt = DateTime.Now,
                 };
 
                 context.Users.Add(user);
@@ -788,34 +845,62 @@ namespace EntityFramework
         {
             try
             {
-                // Query DB directly to ensure up-to-date numbers
                 using var context = new DataContext();
                 var users = context.Users?.ToList() ?? new List<User>();
 
-                // Totals requested
+                // Apply year filter if selected
+                try
+                {
+                    if (yearComboBox != null && yearComboBox.SelectedItem != null)
+                    {
+                        var sel = yearComboBox.SelectedItem.ToString();
+                        if (!string.IsNullOrEmpty(sel) && !sel.Equals("All", StringComparison.CurrentCultureIgnoreCase))
+                        {
+                            if (int.TryParse(sel, out int selYear))
+                            {
+                                users = users.Where(u => u.CreatedAt.HasValue && u.CreatedAt.Value.Year == selYear).ToList();
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // swallow filtering errors – fallback to unfiltered list
+                }
+
                 var totalClients = users.Count;
-                var totalSacs = users.Sum(u => u.NbrBags);                     // Sacs entrée (decimal)
-                var totalPoids = users.Sum(u => u.Weight ?? 0m);               // Poids (decimal)
-                var totalLitresProduites = users.Sum(u => u.NbrLiters ?? 0);   // Litres produites (int)
-                var totalLitresVendues = users.Sum(u => u.PayedLiters ?? 0);   // Nombre Litres vendues (int)
+                var totalSacs = users.Sum(u => u.NbrBags);
+                var totalPoids = users.Sum(u => u.Weight ?? 0m);
+                var totalLitresProduites = users.Sum(u => u.NbrLiters ?? 0);   // total produced liters (int)
+                var totalLitresVendues = users.Sum(u => u.PayedLiters ?? 0);   // paid/sold liters (int)
 
-                // "Profit de litres vendues" interpreted as revenue from sold liters:
-                // sum(payedLiters * unitPriceLiter) per user
                 var totalRevenueFromPaidLiters = users.Sum(u => (u.PayedLiters ?? 0) * (u.UnitPriceLiter ?? 0m));
-
-                // Keep existing debt-related stats for the UI
                 var totalAmountDue = users.Sum(u => u.AmountDue ?? 0m);
-                var averageDue = totalClients > 0 ? users.Average(u => (u.AmountDue ?? 0m)) : 0m;
 
-                // Format and update UI
+                // Get portion fraction (stored as 0..1). If missing, remains 0.
+                decimal portionFraction = 0m;
+                try
+                {
+                    var parameters = context.Parameters?.FirstOrDefault(p => p.Id == 1);
+                    if (parameters != null) portionFraction = parameters.DefaultPortion;
+                }
+                catch
+                {
+                    portionFraction = 0m;
+                }
+
+                // Compute total portion from aggregate produced liters, then round
+                var totalPortionLiters = (int)Math.Round(totalLitresProduites * portionFraction, MidpointRounding.AwayFromZero);
+
+                // Total delivered = produced - portion
+                var totalNombreLitresLivrees = totalLitresProduites - totalPortionLiters;
+
                 var ci = CultureInfo.GetCultureInfo("fr-FR");
 
-                // Ensure dgvStats exists
                 if (dgvStats != null)
                 {
                     dgvStats.Rows.Clear();
 
-                    // Helper inline formatter to match existing "smart" formatting style
                     static string FormatDecimalSmartForLabel(decimal value, CultureInfo culture)
                     {
                         return decimal.Truncate(value) == value
@@ -827,14 +912,20 @@ namespace EntityFramework
                     dgvStats.Rows.Add("Sacs entrée", FormatDecimalSmartForLabel(totalSacs, ci));
                     dgvStats.Rows.Add("Poids", FormatDecimalSmartForLabel(totalPoids, ci));
                     dgvStats.Rows.Add("Litres produites", totalLitresProduites.ToString("N0", ci));
+
+                    // Paid/sold liters (as before)
                     dgvStats.Rows.Add("Nombre Litres vendues", totalLitresVendues.ToString("N0", ci));
+
+                    // New rows per your request
+                    dgvStats.Rows.Add("Total Nombre de litre Portion", totalPortionLiters.ToString("N0", ci));
+                    dgvStats.Rows.Add("Total Nombre de litre livrées", totalNombreLitresLivrees.ToString("N0", ci));
+
                     dgvStats.Rows.Add("Recette (litres vendues)", totalRevenueFromPaidLiters.ToString("N2", ci));
                     dgvStats.Rows.Add("Total dû (clients)", totalAmountDue.ToString("N2", ci));
-                    dgvStats.Rows.Add("Moyenne dû", averageDue.ToString("N2", ci));
+                    // "Moyenne dû" intentionally removed
                 }
 
-                // Update the short summary label as before (keeps backward compatibility)
-                lblStatsSummary.Text = $"Utilisateurs: {totalClients}, Total dû: {totalAmountDue.ToString("N2", ci)}";
+                // Summary label (defensive: lblStatsSummary may be designer-created)
             }
             catch (Exception ex)
             {
@@ -1364,6 +1455,44 @@ namespace EntityFramework
             {
                 // swallow UI errors
             }
+        }
+
+        private void ConfigureStatsGrid()
+        {
+            if (dgvStats == null) return;
+
+            dgvStats.AutoGenerateColumns = false;
+            dgvStats.Columns.Clear();
+            dgvStats.RowHeadersVisible = false;
+            dgvStats.AllowUserToAddRows = false;
+            dgvStats.ReadOnly = true;
+            dgvStats.EnableHeadersVisualStyles = false;
+
+            dgvStats.ColumnHeadersDefaultCellStyle.Font = new Font(dgvStats.Font ?? SystemFonts.DefaultFont, FontStyle.Bold);
+
+            dgvStats.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "colStat",
+                HeaderText = "Statistique",
+                DataPropertyName = null, // we add rows manually
+                ReadOnly = true,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+            });
+
+            dgvStats.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "colValue",
+                HeaderText = "Valeur",
+                DataPropertyName = null,
+                ReadOnly = true,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
+            });
+        }
+
+        private void YearComboBox_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            // reuse existing refresh method
+            BtnRefreshStats_Click(this, EventArgs.Empty);
         }
     }
 }

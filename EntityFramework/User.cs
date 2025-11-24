@@ -56,5 +56,7 @@ namespace EntityFramework
                 ? value.ToString("N0", fr)
                 : value.ToString("N1", fr);
         }
+
+        public DateTime? CreatedAt { get; set; }
     }
 }

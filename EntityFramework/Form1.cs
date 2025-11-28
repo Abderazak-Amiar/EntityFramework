@@ -454,6 +454,7 @@ namespace EntityFramework
                 foreach (var v in ventes)
                 {
                     var time = v.CreatedAt.ToString("HH:mm", fr);
+                    // We don't need to provide a value for the button column when UseColumnTextForButtonValue == true
                     dgvVentesToday.Rows.Add(v.Id, time, v.NbrLitres.ToString("N0", fr), v.Prix.ToString("N2", fr), v.Montant.ToString("N2", fr));
                 }
             }
@@ -562,10 +563,10 @@ namespace EntityFramework
                 // All TextBox inputs across tabs (defensive null checks)
                 var textBoxes = new TextBox[]
                 {
-                    nameTextBox, addressTextBox,
-                    textBox1, textBox2, textBox3, textBox4, textBox5, textBox6, textBox7,
-                    weightTextBox,
-                    txtCompanyName, txtCompanyAddress, txtCompanyPhone, txtPricePerLiter, txtPortion
+                        nameTextBox, addressTextBox,
+                        textBox1, textBox2, textBox3, textBox4, textBox5, textBox6, textBox7,
+                        weightTextBox,
+                        txtCompanyName, txtCompanyAddress, txtCompanyPhone, txtPricePerLiter, txtPortion
                 };
 
                 foreach (var tb in textBoxes)
@@ -1038,9 +1039,60 @@ namespace EntityFramework
             }
         }
 
+        // Implement delete button click on today's ventes grid
         private void DgvVentesToday_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
-            // no-op for now; implement delete or selection if needed
+            try
+            {
+                if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+
+                var dgv = sender as DataGridView ?? dgvVentesToday;
+                if (dgv == null) return;
+
+                var column = dgv.Columns[e.ColumnIndex];
+                if (column == null) return;
+
+                // Only handle delete button clicks
+                if (!string.Equals(column.Name, "colVenteDelete", StringComparison.InvariantCultureIgnoreCase))
+                    return;
+
+                var row = dgv.Rows[e.RowIndex];
+                if (row == null) return;
+
+                var idCell = row.Cells["colVenteId"];
+                if (idCell == null || idCell.Value == null) return;
+
+                if (!int.TryParse(idCell.Value.ToString(), out int venteId))
+                    return;
+
+                var confirm = MessageBox.Show("Supprimer cette vente ?", "Confirmer la suppression", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (confirm != DialogResult.Yes) return;
+
+                using var ctx = new DataContext();
+                if (ctx.Ventes == null)
+                {
+                    MessageBox.Show("Le contexte de la base de données n'est pas correctement configuré. Le DbSet 'Ventes' est nul.");
+                    return;
+                }
+
+                var vente = ctx.Ventes.Find(venteId);
+                if (vente == null)
+                {
+                    MessageBox.Show("Vente introuvable.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                ctx.Ventes.Remove(vente);
+                ctx.SaveChanges();
+
+                // Refresh UI after deletion (no success MessageBox)
+                LoadVentesToday();
+                BtnRefreshStats_Click(this, EventArgs.Empty);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Erreur lors de la suppression de la vente : " + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void ToastTimer_Tick(object sender, EventArgs e)
@@ -1293,10 +1345,10 @@ namespace EntityFramework
         {
             var candidates = new[]
             {
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "SumatraPDF", "SumatraPDF.exe"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "SumatraPDF", "SumatraPDF.exe"),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SumatraPDF", "SumatraPDF.exe")
-            };
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "SumatraPDF", "SumatraPDF.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "SumatraPDF", "SumatraPDF.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SumatraPDF", "SumatraPDF.exe")
+                };
 
             return candidates.FirstOrDefault(File.Exists);
         }
@@ -1437,8 +1489,8 @@ namespace EntityFramework
 
                 var ci = CultureInfo.GetCultureInfo("fr-FR");
 
-#if DEBUG
-        Debug.WriteLine($"[Stats DBG] produced={totalLitresProduites}, portionFraction={portionFraction}, portionEntrées={totalPortionEntrees}, portionVendues={totalPortionVendues}, delivered={totalNombreLitresLivrees}");
+#if DEBUG   
+                Debug.WriteLine($"[Stats DBG] produced={totalLitresProduites}, portionFraction={portionFraction}, portionEntrées={totalPortionEntrees}, portionVendues={totalPortionVendues}, delivered={totalNombreLitresLivrees}");
 #endif
 
                 if (dgvStats != null)

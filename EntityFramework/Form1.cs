@@ -583,8 +583,30 @@ namespace EntityFramework
                 if (rdoPortion != null) rdoPortion.Enabled = enabled;
                 if (rdoPaiement != null) rdoPaiement.Enabled = enabled;
 
-                if (!enabled)
+                // New behavior:
+                // - When edit mode is enabled (editCheckBox.Checked == true) the payment fields
+                //   textBox5/6/7 must be disabled and Portion mode selected.
+                if (enabled)
                 {
+                    try
+                    {
+                        if (textBox5 != null) textBox5.Enabled = false;
+                        if (textBox6 != null) textBox6.Enabled = false;
+                        if (textBox7 != null) textBox7.Enabled = false;
+                    }
+                    catch { }
+
+                    try
+                    {
+                        if (rdoPortion != null) rdoPortion.Checked = true;
+                        // Ensure UI reflects the selected mode (clears payment fields, etc.)
+                        ApplyMode();
+                    }
+                    catch { }
+                }
+                else
+                {
+                    // When edit mode is disabled, keep payment fields disabled as before
                     try
                     {
                         if (textBox5 != null) textBox5.Enabled = false;
@@ -1315,7 +1337,6 @@ namespace EntityFramework
                     dgvStats.Rows.Add("Total Nombre de litre Portion Entrées", totalPortionEntrees.ToString("N1", ci));
                     dgvStats.Rows.Add("Total Nombre de litre livrées", totalNombreLitresLivrees.ToString("N1", ci));
                     dgvStats.Rows.Add("Recette (litres vendues)", totalRevenueFromPaidLiters.ToString("N2", ci));
-                    dgvStats.Rows.Add("Total dû (clients)", totalAmountDue.ToString("N2", ci));
                 }
 
                 if (dgvVenteStats != null)

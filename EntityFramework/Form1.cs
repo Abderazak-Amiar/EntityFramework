@@ -895,14 +895,53 @@ namespace EntityFramework
         {
             try
             {
-                // Minimal safe behaviour: attempt to reload parameters after a possible save action.
-                // Implement actual save logic here if needed.
+                // Defensive: nothing to save if controls are missing
+                if (txtCompanyName == null && txtCompanyAddress == null && txtCompanyPhone == null && txtPricePerLiter == null && txtPortion == null)
+                    return;
+
+                using var ctx = new DataContext();
+                var parameters = ctx.Parameters?.FirstOrDefault(p => p.Id == 1);
+                if (parameters == null)
+                {
+                    // No parameters row found — inform the user (optional: create a row automatically instead)
+                    MessageBox.Show("Aucun enregistrement de paramètres trouvé dans la base de données. Créez d'abord un enregistrement (Id=1) ou initialisez la table.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                // Read text fields (defensive null checks)
+                parameters.CompanyName = txtCompanyName?.Text.Trim() ?? string.Empty;
+                parameters.CompanyAddress = txtCompanyAddress?.Text.Trim() ?? string.Empty;
+                parameters.CompanyPhone = txtCompanyPhone?.Text.Trim() ?? string.Empty;
+
+                // Parse price per liter
+                if (txtPricePerLiter != null && TryParseDecimal(txtPricePerLiter.Text, out decimal parsedPrice))
+                    parameters.DefaultUnitPrice = parsedPrice;
+                else
+                    parameters.DefaultUnitPrice = 0m;
+
+                // Parse portion percent (0..100) and convert to fraction (0..1)
+                decimal portionPercent = 0m;
+                if (txtPortion != null && TryParseDecimal(txtPortion.Text, out decimal parsedPortion))
+                    portionPercent = parsedPortion;
+
+                if (portionPercent < 0m) portionPercent = 0m;
+                if (portionPercent > 100m) portionPercent = 100m;
+                parameters.DefaultPortion = portionPercent / 100m;
+
+                // Persist changes
+                ctx.SaveChanges();
+
+                // Refresh UI and dependent values
                 LoadParameters();
-                MessageBox.Show("Paramètres rechargés.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                PopulateVenteDefaultPrice();
+                PopulateDefaultUnitPrice();
+                ApplyMode();
+
+                MessageBox.Show("Paramètres sauvegardés et rechargés.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
-            catch
+            catch (Exception ex)
             {
-                // swallow
+                MessageBox.Show("Erreur lors de l'enregistrement des paramètres : " + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

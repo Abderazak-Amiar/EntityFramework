@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Globalization;
 
@@ -58,5 +59,8 @@ namespace EntityFramework
         }
 
         public DateTime? CreatedAt { get; set; }
+
+        // NEW: persisted mode flag (true = Portion, false = Paiement). Nullable for migration safety.
+        public bool? IsPortionMode { get; set; }
     }
 }

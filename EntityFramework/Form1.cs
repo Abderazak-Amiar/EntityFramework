@@ -1107,6 +1107,31 @@ namespace EntityFramework
                 weightTextBox.Text = selectedUser.Weight.HasValue && selectedUser.Weight.Value != 0m
                     ? FormatDecimalSmart(selectedUser.Weight.Value)
                     : string.Empty;
+
+                // Restore persisted Portion / Paiement mode for this user
+                try
+                {
+                    if (rdoPortion != null && rdoPaiement != null)
+                    {
+                        // Temporarily detach handlers to avoid duplicate ApplyMode calls
+                        rdoPortion.CheckedChanged -= rdoMode_CheckedChanged;
+                        rdoPaiement.CheckedChanged -= rdoMode_CheckedChanged;
+
+                        bool isPortion = selectedUser.IsPortionMode ?? true; // default to Portion
+                        rdoPortion.Checked = isPortion;
+                        rdoPaiement.Checked = !isPortion;
+
+                        // Reattach handlers and ensure UI consistent
+                        rdoPortion.CheckedChanged += rdoMode_CheckedChanged;
+                        rdoPaiement.CheckedChanged += rdoMode_CheckedChanged;
+
+                        ApplyMode();
+                    }
+                }
+                catch
+                {
+                    // ignore radio restore errors
+                }
             }
             else
             {
@@ -1461,6 +1486,8 @@ namespace EntityFramework
                         AmountDue = amountDue,
                         Weight = weightNullable,
                         CreatedAt = DateTime.Now,
+                        // Persist selected mode
+                        IsPortionMode = rdoPortion?.Checked ?? true
                     };
 
                     context.Users.Add(user);
@@ -1545,6 +1572,9 @@ namespace EntityFramework
                     userToUpdate.PayedLiters = payedLitersNullable;
                     userToUpdate.AmountDue = amountDue;
                     userToUpdate.Weight = weightNullable;
+
+                    // Persist selected mode
+                    userToUpdate.IsPortionMode = rdoPortion?.Checked ?? true;
 
                     context.SaveChanges();
                     MessageBox.Show("Utilisateur mis à jour avec succès");

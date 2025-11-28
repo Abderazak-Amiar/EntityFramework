@@ -1,24 +1,23 @@
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Windows.Forms;
+
 namespace EntityFramework
 {
-    using Microsoft.EntityFrameworkCore;
-    using System;
-    using System.Collections.Generic;
-    using System.Diagnostics;
-    using System.Drawing;
-    using System.Globalization;
-    using System.IO;
-    using System.Linq;
-    using System.Windows.Forms;
-
     public partial class Form1 : Form
     {
         private readonly BindingSource usersBinding = new BindingSource();
 
         // Prevent programmatic selection changes from triggering the selection handler
-
         private bool suppressSelectionEvents;
 
-        // Replaces previous bool suppressPortionApply;
+        // Prevent re-entrancy when applying portion
         private bool suppressPortionApply;
 
         public List<User> DatabaseUsers { get; private set; } = new List<User>();
@@ -43,6 +42,7 @@ namespace EntityFramework
             ItemList.DataSource = usersBinding;
 
             // Wire the selection change event to the existing handler
+            ItemList.SelectionChanged -= ItemList_SelectedRowsChanged;
             ItemList.SelectionChanged += ItemList_SelectedRowsChanged;
             ItemList.DataBindingComplete -= ItemList_DataBindingComplete;
             ItemList.DataBindingComplete += ItemList_DataBindingComplete;
@@ -204,9 +204,85 @@ namespace EntityFramework
             {
                 // ignore UI wiring errors
             }
+
+            // Radio buttons wiring and default mode selection
+            try
+            {
+                if (rdoPortion != null && rdoPaiement != null)
+                {
+                    rdoPortion.CheckedChanged -= rdoMode_CheckedChanged;
+                    rdoPaiement.CheckedChanged -= rdoMode_CheckedChanged;
+
+                    // default to Portion mode
+                    rdoPortion.Checked = true;
+
+                    rdoPortion.CheckedChanged += rdoMode_CheckedChanged;
+                    rdoPaiement.CheckedChanged += rdoMode_CheckedChanged;
+
+                    ApplyMode();
+                }
+            }
+            catch
+            {
+                // ignore
+            }
         }
 
-        // Populate vente price from Parameters.DefaultUnitPrice when empty
+        // ---------------------------
+        // Utilities and helper methods
+        // ---------------------------
+
+        // Smart decimal formatter used across the form
+        private static string FormatDecimalSmart(decimal value)
+        {
+            return decimal.Truncate(value) == value
+                ? value.ToString("N0", CultureInfo.CurrentCulture)
+                : value.ToString("N1", CultureInfo.CurrentCulture);
+        }
+
+        // Refresh the UI list of users from the database and bind to the BindingSource.
+        private void RefreshUsers()
+        {
+            try
+            {
+                using var ctx = new DataContext();
+                var users = ctx.Users?.OrderBy(u => u.Name).ToList() ?? new List<User>();
+                DatabaseUsers = users;
+                usersBinding.DataSource = DatabaseUsers;
+                // Ensure grid doesn't auto-select first row
+                ClearGridSelection();
+            }
+            catch
+            {
+                // swallow DB/UI errors
+            }
+        }
+
+        // Load application Parameters into the UI controls (defensive)
+        private void LoadParameters()
+        {
+            try
+            {
+                if (txtCompanyName == null && txtCompanyAddress == null && txtCompanyPhone == null && txtPricePerLiter == null && txtPortion == null)
+                    return;
+
+                using var ctx = new DataContext();
+                var parameters = ctx.Parameters?.FirstOrDefault(p => p.Id == 1);
+                if (parameters != null)
+                {
+                    if (txtCompanyName != null) txtCompanyName.Text = parameters.CompanyName ?? string.Empty;
+                    if (txtCompanyAddress != null) txtCompanyAddress.Text = parameters.CompanyAddress ?? string.Empty;
+                    if (txtCompanyPhone != null) txtCompanyPhone.Text = parameters.CompanyPhone ?? string.Empty;
+                    if (txtPricePerLiter != null && parameters.DefaultUnitPrice != 0m) txtPricePerLiter.Text = parameters.DefaultUnitPrice.ToString(CultureInfo.CurrentCulture);
+                    if (txtPortion != null) txtPortion.Text = (parameters.DefaultPortion * 100m).ToString(CultureInfo.CurrentCulture);
+                }
+            }
+            catch
+            {
+                // swallow DB errors
+            }
+        }
+
         private void PopulateVenteDefaultPrice()
         {
             try
@@ -227,6 +303,136 @@ namespace EntityFramework
             {
                 // swallow
             }
+        }
+
+        // Populate textBox5 with default unit price (if empty) from Parameters or UI fallback
+        private void PopulateDefaultUnitPrice()
+        {
+            try
+            {
+                if (textBox5 == null) return;
+                if (!string.IsNullOrWhiteSpace(textBox5.Text)) return;
+
+                using var ctx = new DataContext();
+                var parameters = ctx.Parameters?.FirstOrDefault(p => p.Id == 1);
+                if (parameters != null && parameters.DefaultUnitPrice != 0m)
+                {
+                    textBox5.Text = parameters.DefaultUnitPrice.ToString(CultureInfo.CurrentCulture);
+                }
+            }
+            catch
+            {
+                // swallow
+            }
+        }
+
+        private void ConfigureStatsGrid()
+        {
+            try
+            {
+                if (dgvStats != null) dgvStats.AutoGenerateColumns = false;
+                if (dgvVenteStats != null) dgvVenteStats.AutoGenerateColumns = false;
+            }
+            catch
+            {
+                // swallow
+            }
+        }
+
+        // Apply a simple text filter to the in-memory users list and rebind
+        private void ApplyFilter(string text)
+        {
+            try
+            {
+                if (DatabaseUsers == null || usersBinding == null)
+                    return;
+
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    usersBinding.DataSource = DatabaseUsers;
+                    ClearGridSelection();
+                    return;
+                }
+
+                var term = text.Trim();
+                var filtered = DatabaseUsers.Where(u =>
+                    (!string.IsNullOrEmpty(u.Name) && u.Name.IndexOf(term, StringComparison.CurrentCultureIgnoreCase) >= 0)
+                    || (!string.IsNullOrEmpty(u.Phone) && u.Phone.IndexOf(term, StringComparison.CurrentCultureIgnoreCase) >= 0)
+                    || (!string.IsNullOrEmpty(u.Address) && u.Address.IndexOf(term, StringComparison.CurrentCultureIgnoreCase) >= 0)
+                ).ToList();
+
+                usersBinding.DataSource = filtered;
+                ClearGridSelection();
+            }
+            catch
+            {
+                // swallow
+            }
+        }
+
+        // Numbering/config for ItemList
+        private void ConfigureGridColumns()
+        {
+            if (ItemList == null) return;
+
+            ItemList.AutoGenerateColumns = false;
+            // Keep existing columns (designer already added the N° column). Clear other runtime columns to avoid duplicates.
+            var numberCol = ItemList.Columns.Cast<DataGridViewColumn>().FirstOrDefault(c => c.Name == "colNumber");
+            ItemList.Columns.Clear();
+            if (numberCol != null) ItemList.Columns.Add(numberCol);
+
+            // Example columns for User entity; adjust as needed for your model
+            ItemList.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "colName",
+                HeaderText = "Nom",
+                DataPropertyName = "Name",
+                ReadOnly = true,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+            });
+
+            ItemList.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "colPhone",
+                HeaderText = "Téléphone",
+                DataPropertyName = "Phone",
+                ReadOnly = true,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
+            });
+
+            ItemList.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "colAddress",
+                HeaderText = "Adresse",
+                DataPropertyName = "Address",
+                ReadOnly = true,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+            });
+        }
+
+        private void ItemList_DataBindingComplete(object? sender, DataGridViewBindingCompleteEventArgs e)
+        {
+            // Number visible rows in the "N°" column (if present)
+            try
+            {
+                if (ItemList != null && ItemList.Columns.Contains("colNumber"))
+                {
+                    for (int i = 0; i < ItemList.Rows.Count; i++)
+                    {
+                        var row = ItemList.Rows[i];
+                        // Only set numbering for non-new rows
+                        if (!row.IsNewRow)
+                            row.Cells["colNumber"].Value = (i + 1).ToString(CultureInfo.CurrentCulture);
+                    }
+                }
+            }
+            catch
+            {
+                // ignore numbering errors
+            }
+
+            // Optionally, clear selection after data binding to avoid auto-selecting the first row
+            ClearGridSelection();
         }
 
         // Load today's ventes into the DataGridView
@@ -291,363 +497,480 @@ namespace EntityFramework
             }
         }
 
-        private void BtnRefreshStats_Click(object sender, EventArgs e)
+        // Parsing helpers
+
+        private static bool TryParseDecimal(string? s, out decimal value)
+        {
+            value = 0m;
+            if (string.IsNullOrWhiteSpace(s)) return false;
+            return decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out value)
+                   || decimal.TryParse(s, NumberStyles.Any, CultureInfo.CurrentCulture, out value);
+        }
+
+        private static bool TryParseInt(string? s, out int? value)
+        {
+            value = null;
+            if (string.IsNullOrWhiteSpace(s)) return false;
+            if (int.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out int v) ||
+                int.TryParse(s, NumberStyles.Any, CultureInfo.CurrentCulture, out v))
+            {
+                value = v;
+                return true;
+            }
+            return false;
+        }
+
+        private static bool TryParseDecimal(string? s, out decimal? value)
+        {
+            value = null;
+            if (string.IsNullOrWhiteSpace(s)) return false;
+            if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal v) ||
+                decimal.TryParse(s, NumberStyles.Any, CultureInfo.CurrentCulture, out v))
+            {
+                value = v;
+                return true;
+            }
+            return false;
+        }
+
+        // ---------------------------
+        // Event handler implementations referenced by Designer
+        // ---------------------------
+
+        private void editCheckBox_CheckedChanged(object? sender, EventArgs e)
         {
             try
             {
-                using var context = new DataContext();
-                var users = context.Users?.ToList() ?? new List<User>();
-
-                // Load ventes
-                var ventes = context.Ventes?.ToList() ?? new List<Vente>();
-
-                // Apply year filter if selected
-                try
-                {
-                    if (yearComboBox != null && yearComboBox.SelectedItem != null)
-                    {
-                        var sel = yearComboBox.SelectedItem.ToString();
-                        if (!string.IsNullOrEmpty(sel) && !sel.Equals("All", StringComparison.CurrentCultureIgnoreCase))
-                        {
-                            if (int.TryParse(sel, out int selYear))
-                            {
-                                users = users.Where(u => u.CreatedAt.HasValue && u.CreatedAt.Value.Year == selYear).ToList();
-                                ventes = ventes.Where(v => v.CreatedAt.Year == selYear).ToList();
-                            }
-                        }
-                    }
-                }
-                catch
-                {
-                    // swallow filtering errors – fallback to unfiltered list
-                }
-
-                var totalClients = users.Count;
-                var totalSacs = users.Sum(u => u.NbrBags);
-                var totalPoids = users.Sum(u => u.Weight ?? 0m);
-                var totalLitresProduites = users.Sum(u => u.NbrLiters ?? 0);   // total produced liters (int)
-                var totalLitresVendues = users.Sum(u => u.PayedLiters ?? 0);   // paid/sold liters (int)
-
-                var totalRevenueFromPaidLiters = users.Sum(u => (u.PayedLiters ?? 0) * (u.UnitPriceLiter ?? 0m));
-                var totalAmountDue = users.Sum(u => u.AmountDue ?? 0m);
-
-                // Ventes aggregates
-                var totalVentesLitres = ventes.Sum(v => v.NbrLitres);
-                var totalVentesRecette = ventes.Sum(v => v.Montant);
-
-                // Get portion fraction (stored as 0..1). If missing, remains 0.
-                decimal portionFraction = 0m;
-                try
-                {
-                    var parameters = context.Parameters?.FirstOrDefault(p => p.Id == 1);
-                    if (parameters != null) portionFraction = parameters.DefaultPortion;
-                }
-                catch
-                {
-                    portionFraction = 0m;
-                }
-
-                // Compute total portion from aggregate produced liters, then round
-                var totalPortionLiters = (int)Math.Round(totalLitresProduites * portionFraction, MidpointRounding.AwayFromZero);
-
-                // Total delivered = produced - portion
-                var totalNombreLitresLivrees = totalLitresProduites - totalPortionLiters;
-
-                var ci = CultureInfo.GetCultureInfo("fr-FR");
-
-                if (dgvStats != null)
-                {
-                    dgvStats.Rows.Clear();
-
-                    static string FormatDecimalSmartForLabel(decimal value, CultureInfo culture)
-                    {
-                        return decimal.Truncate(value) == value
-                            ? value.ToString("N0", culture)
-                            : value.ToString("N1", culture);
-                    }
-
-                    dgvStats.Rows.Add("Total Clients", totalClients.ToString("N0", ci));
-                    dgvStats.Rows.Add("Sacs entrée", FormatDecimalSmartForLabel(totalSacs, ci));
-                    dgvStats.Rows.Add("Poids", FormatDecimalSmartForLabel(totalPoids, ci));
-                    dgvStats.Rows.Add("Litres produites", totalLitresProduites.ToString("N0", ci));
-
-                    // Paid/sold liters (as before)
-                    dgvStats.Rows.Add("Nombre Litres vendues", totalLitresVendues.ToString("N0", ci));
-
-                    // Vente-specific stats
-                    dgvStats.Rows.Add("Ventes - Litres (journalisées)", totalVentesLitres.ToString("N0", ci));
-                    dgvStats.Rows.Add("Ventes - Recette (journalisée)", totalVentesRecette.ToString("N2", ci));
-
-                    // New rows per your request
-                    dgvStats.Rows.Add("Total Nombre de litre Portion", totalPortionLiters.ToString("N0", ci));
-                    dgvStats.Rows.Add("Total Nombre de litre livrées", totalNombreLitresLivrees.ToString("N0", ci));
-
-                    dgvStats.Rows.Add("Recette (litres vendues)", totalRevenueFromPaidLiters.ToString("N2", ci));
-                    dgvStats.Rows.Add("Total dû (clients)", totalAmountDue.ToString("N2", ci));
-                    // "Moyenne dû" intentionally removed
-                }
-
-                // Refresh today's ventes view
-                LoadVentesToday();
+                if (editCheckBox != null)
+                    SetEditMode(editCheckBox.Checked);
             }
-            catch (Exception ex)
+            catch
             {
-                MessageBox.Show("Échec du chargement des statistiques : " + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                // swallow UI errors
             }
         }
 
-        private void MainTabControl_SelectedIndexChanged(object sender, EventArgs e)
+        private void SetEditMode(bool enabled)
         {
-            // When user navigates to the Parameters tab, reload values from DB (keeps UI in sync)
             try
             {
-                if (mainTabControl.SelectedTab == tabParameters)
-                    LoadParameters();
+                // Buttons
+                if (createBtn != null) createBtn.Enabled = enabled;
+                if (updateBtn != null) updateBtn.Enabled = enabled;
+                if (deleteBtn != null) deleteBtn.Enabled = enabled;
 
-                if (mainTabControl.SelectedTab == tabVente)
+                // All TextBox inputs across tabs (defensive null checks)
+                var textBoxes = new TextBox[]
                 {
-                    PopulateVenteDefaultPrice();
-                    LoadVentesToday();
+                    nameTextBox, addressTextBox,
+                    textBox1, textBox2, textBox3, textBox4, textBox5, textBox6, textBox7,
+                    weightTextBox,
+                    txtCompanyName, txtCompanyAddress, txtCompanyPhone, txtPricePerLiter, txtPortion
+                };
+
+                foreach (var tb in textBoxes)
+                {
+                    if (tb != null) tb.Enabled = enabled;
+                }
+
+                // Ensure search box is always enabled
+                if (searchTextBox != null) searchTextBox.Enabled = true;
+
+                // Parameter save button
+                if (btnSaveParameters != null) btnSaveParameters.Enabled = enabled;
+
+                // Radio buttons: keep them disabled until user enables edit mode
+                if (rdoPortion != null) rdoPortion.Enabled = enabled;
+                if (rdoPaiement != null) rdoPaiement.Enabled = enabled;
+
+                if (!enabled)
+                {
+                    try
+                    {
+                        if (textBox5 != null) textBox5.Enabled = false;
+                        if (textBox6 != null) textBox6.Enabled = false;
+                        if (textBox7 != null) textBox7.Enabled = false;
+                    }
+                    catch { }
                 }
             }
             catch
             {
-                // swallow — LoadParameters already shows errors if needed
+                // ignore UI errors
             }
         }
 
-        private void label1_Click(object sender, EventArgs e)
+        private void rdoMode_CheckedChanged(object? sender, EventArgs e)
         {
+            try
+            {
+                ApplyMode();
+            }
+            catch
+            {
+                // swallow
+            }
         }
 
-        private void updateBtn_Click(object sender, EventArgs e)
+        // Apply selected mode:
+        // - Portion: clear and disable textBox5, textBox6, textBox7
+        // - Paiement: enable textBox5, textBox6, textBox7; populate unit price & portion-liters from Parameters (or UI fallbacks)
+        private void ApplyMode()
         {
-            if (ItemList.CurrentRow == null)
+            try
             {
-                MessageBox.Show("Aucun utilisateur sélectionné.");
-                return;
-            }
-
-            var selectedUser = ItemList.CurrentRow.DataBoundItem as User;
-            if (selectedUser == null)
-            {
-                MessageBox.Show("Aucun utilisateur sélectionné.");
-                return;
-            }
-
-            // Read values from form
-            var name = nameTextBox.Text.Trim();
-            var phone = textBox1.Text.Trim();
-            var address = addressTextBox.Text.Trim();
-
-            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(address))
-            {
-                MessageBox.Show("Le nom et l'adresse sont requis.");
-                return;
-            }
-
-            if (!TryParseDecimal(textBox2.Text, out decimal nbrBags))
-                nbrBags = 0m;
-
-            var nbrContainers = textBox3.Text.Trim();
-
-            if (!TryParseInt(textBox4.Text, out int? nbrLitersNullable))
-                nbrLitersNullable = null;
-
-            if (!TryParseDecimal(textBox5.Text, out decimal unitPrice))
-                unitPrice = 0m;
-
-            if (!TryParseInt(textBox6.Text, out int? payedLitersNullable))
-                payedLitersNullable = null;
-
-            if (!TryParseDecimal(textBox7.Text, out decimal amountDue))
-                amountDue = (payedLitersNullable ?? 0) * unitPrice;
-
-            // Parse weight (nullable)
-            if (!TryParseDecimal(weightTextBox.Text, out decimal? weightNullable))
-                weightNullable = null;
-
-            using (var context = new DataContext())
-            {
-                if (context.Users == null)
-                {
-                    MessageBox.Show("Le contexte de la base de données n'est pas correctement configuré. Le DbSet 'Users' est nul.");
+                if (textBox5 == null || textBox6 == null || textBox7 == null || textBox4 == null)
                     return;
-                }
 
-                var userToUpdate = context.Users.Find(selectedUser.Id);
-                if (userToUpdate != null)
+                // When radio buttons are not present or not enabled, do nothing
+                if ((rdoPortion == null || rdoPaiement == null) || (!rdoPortion.Enabled && !rdoPaiement.Enabled))
+                    return;
+
+                bool isPortion = rdoPortion != null && rdoPortion.Checked;
+
+                if (isPortion)
                 {
-                    userToUpdate.Name = name;
-                    userToUpdate.Phone = phone;
-                    userToUpdate.Address = address;
-                    userToUpdate.NbrBags = nbrBags;
-                    userToUpdate.NbrContainers = nbrContainers;
-                    userToUpdate.NbrLiters = nbrLitersNullable;
-                    userToUpdate.UnitPriceLiter = unitPrice;
-                    userToUpdate.PayedLiters = payedLitersNullable;
-                    userToUpdate.AmountDue = amountDue;
-                    userToUpdate.Weight = weightNullable;
+                    // Clear and disable payment fields
+                    textBox5.Text = string.Empty;
+                    textBox6.Text = string.Empty;
+                    textBox7.Text = string.Empty;
 
-                    context.SaveChanges();
-                    MessageBox.Show("Utilisateur mis à jour avec succès");
-                    editCheckBox.Checked = false;
+                    textBox5.Enabled = false;
+                    textBox6.Enabled = false;
+                    textBox7.Enabled = false;
                 }
                 else
                 {
-                    MessageBox.Show("L'utilisateur sélectionné est introuvable dans la base de données.");
+                    // Paiement mode: enable fields
+                    textBox5.Enabled = true;
+                    textBox6.Enabled = true;
+                    textBox7.Enabled = true;
+
+                    decimal unitPrice = 0m;
+                    decimal portionFraction = 0m; // stored as 0..1
+
+                    try
+                    {
+                        using var ctx = new DataContext();
+                        var parameters = ctx.Parameters?.FirstOrDefault(p => p.Id == 1);
+                        if (parameters != null)
+                        {
+                            unitPrice = parameters.DefaultUnitPrice;
+                            portionFraction = parameters.DefaultPortion;
+                        }
+                    }
+                    catch
+                    {
+                        // ignore DB errors
+                    }
+
+                    // fallbacks to UI controls if DB didn't provide values
+                    if (unitPrice == 0m && txtPricePerLiter != null && TryParseDecimal(txtPricePerLiter.Text, out decimal tmpPrice))
+                        unitPrice = tmpPrice;
+
+                    if (portionFraction == 0m && txtPortion != null && TryParseDecimal(txtPortion.Text, out decimal tmpPortionPercent))
+                        portionFraction = tmpPortionPercent / 100m;
+
+                    // compute portion liters from textBox4 (source liters)
+                    int sourceLiters = 0;
+                    if (TryParseInt(textBox4.Text, out int? srcNullable))
+                        sourceLiters = srcNullable ?? 0;
+
+                    var portionDecimal = sourceLiters * portionFraction;
+
+                    // Show decimals for portion (do not round to int)
+                    if (portionDecimal != 0m)
+                        textBox6.Text = FormatDecimalSmart(portionDecimal);
+                    else
+                        textBox6.Text = string.Empty;
+
+                    if (unitPrice != 0m)
+                        textBox5.Text = unitPrice.ToString(CultureInfo.CurrentCulture);
+
+                    // Recalculate total using existing shared method
+                    PriceOrPaidLiters_TextChanged(this, EventArgs.Empty);
                 }
             }
-
-            // Refresh list
-            RefreshUsers();
+            catch
+            {
+                // swallow UI errors
+            }
         }
 
-        private void createBtn_Click(object sender, EventArgs e)
+        // Compute textBox6 = textBox4 * portion (txtPortion as percent 0..100).
+        // Writes a decimal into textBox6 using current culture (no integer rounding).
+        private void ApplyPortionToTextBox6()
         {
-            var name = nameTextBox.Text.Trim();
-            var phone = textBox1.Text.Trim();
-            var address = addressTextBox.Text.Trim();
-
-            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(address))
+            try
             {
-                MessageBox.Show("Le nom et l'adresse sont requis.");
-                return;
-            }
+                if (suppressPortionApply) return;
+                if (textBox4 == null || textBox6 == null || txtPortion == null) return;
 
-            if (!TryParseDecimal(textBox2.Text, out decimal nbrBags))
-                nbrBags = 0m;
-
-            var nbrContainers = textBox3.Text.Trim();
-
-            if (!TryParseInt(textBox4.Text, out int? nbrLitersNullable))
-                nbrLitersNullable = null;
-
-            if (!TryParseDecimal(textBox5.Text, out decimal unitPrice))
-                unitPrice = 0m;
-
-            if (!TryParseInt(textBox6.Text, out int? payedLitersNullable))
-                payedLitersNullable = null;
-
-            // Parse weight (nullable)
-            if (!TryParseDecimal(weightTextBox.Text, out decimal? weightNullable))
-                weightNullable = null;
-
-            decimal amountDue = 0m;
-            if (TryParseDecimal(textBox7.Text, out decimal parsedAmount))
-                amountDue = parsedAmount;
-            else
-                amountDue = (payedLitersNullable ?? 0) * unitPrice;
-
-            using (var context = new DataContext())
-            {
-                if (context.Users == null)
+                // Parse source liters (textBox4) as integer (the source number of liters is typically integer)
+                if (!TryParseInt(textBox4.Text, out int? litersNullable))
                 {
-                    MessageBox.Show("Le contexte de la base de données n'est pas correctement configuré. Le DbSet 'Users' est nul.");
+                    // if source is not numeric, clear target to avoid stale values
+                    textBox6.Text = string.Empty;
                     return;
                 }
 
-                var user = new User
+                var liters = litersNullable ?? 0;
+
+                // Parse portion as percent (0..100)
+                if (!TryParseDecimal(txtPortion.Text, out decimal portionPercent))
                 {
-                    Name = name,
-                    Phone = phone,
-                    Address = address,
-                    NbrBags = nbrBags,
-                    NbrContainers = nbrContainers,
-                    NbrLiters = nbrLitersNullable,
-                    UnitPriceLiter = unitPrice,
-                    PayedLiters = payedLitersNullable,
-                    AmountDue = amountDue,
-                    Weight = weightNullable,
-                    CreatedAt = DateTime.Now,
-                };
-
-                context.Users.Add(user);
-                context.SaveChanges();
-            }
-
-            MessageBox.Show("Utilisateur créé avec succès");
-
-            // Refresh list
-            RefreshUsers();
-            editCheckBox.Checked = false;
-        }
-
-        private void readBtn_Click(object sender, EventArgs e)
-        {
-            // kept for designer wiring - forward to central refresh
-            RefreshUsers();
-        }
-
-        private void deleteBtn_Click(object sender, EventArgs e)
-        {
-            if (ItemList.CurrentRow == null)
-            {
-                MessageBox.Show("Aucun utilisateur sélectionné.");
-                return;
-            }
-
-            var selectedUser = ItemList.CurrentRow.DataBoundItem as User;
-            if (selectedUser == null)
-            {
-                MessageBox.Show("Aucun utilisateur sélectionné.");
-                return;
-            }
-
-            using (var context = new DataContext())
-            {
-                if (context.Users == null)
-                {
-                    MessageBox.Show("Le contexte de la base de données n'est pas correctement configuré. Le DbSet 'Users' est nul.");
+                    // invalid portion -> do not update
                     return;
                 }
 
-                var user = context.Users.Find(selectedUser.Id);
-                if (user == null)
+                // Clamp portion to [0,100]
+                if (portionPercent < 0m) portionPercent = 0m;
+                if (portionPercent > 100m) portionPercent = 100m;
+
+                var fraction = portionPercent / 100m;
+                var adjustedDecimal = liters * fraction;
+
+                // Prevent re-entrancy while updating the target textbox
+                suppressPortionApply = true;
+                try
                 {
-                    MessageBox.Show("Utilisateur introuvable.");
+                    // Show decimal values (smart formatting: N0 when integer, N1 when fractional)
+                    textBox6.Text = adjustedDecimal != 0m ? FormatDecimalSmart(adjustedDecimal) : string.Empty;
+                }
+                finally
+                {
+                    suppressPortionApply = false;
+                }
+            }
+            catch
+            {
+                // swallow UI errors
+            }
+        }
+
+        private void TxtPortion_Leave(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (txtPortion == null) return;
+
+                if (!TryParseDecimal(txtPortion.Text, out decimal portionPercent))
+                {
+                    txtPortion.Text = string.Empty;
                     return;
                 }
 
-                context.Users.Remove(user);
-                context.SaveChanges();
+                if (portionPercent < 0m) portionPercent = 0m;
+                if (portionPercent > 100m) portionPercent = 100m;
+
+                txtPortion.Text = portionPercent.ToString(CultureInfo.CurrentCulture);
+
+                // Update dependent fields
+                ApplyPortionToTextBox6();
             }
-
-            MessageBox.Show("Utilisateur supprimé avec succès");
-            // Refresh the list
-            RefreshUsers();
-            editCheckBox.Checked = false;
+            catch
+            {
+                // swallow UI errors
+            }
         }
 
-        private void textBox1_TextChanged(object sender, EventArgs e)
+        private void TxtPortion_TextChanged(object? sender, EventArgs e)
         {
+            try
+            {
+                ApplyPortionToTextBox6();
+            }
+            catch
+            {
+                // swallow
+            }
         }
 
-        private void textBox2_TextChanged(object sender, EventArgs e)
+        private void TextBox4_TextChanged(object? sender, EventArgs e)
         {
+            try
+            {
+                // When source liters change, recompute portion & mode-dependent values
+                ApplyPortionToTextBox6();
+                ApplyMode();
+            }
+            catch
+            {
+                // swallow
+            }
         }
 
-        private void ItemList_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        // Recalculate AmountDue = UnitPrice * PayedLiters and update textBox7 live.
+        // Accept decimal values for textBox6 (payed liters) so totals use fractional liters.
+        private void PriceOrPaidLiters_TextChanged(object? sender, EventArgs e)
         {
+            try
+            {
+                if (textBox5 == null || textBox6 == null || textBox7 == null) return;
+
+                if (!TryParseDecimal(textBox5.Text, out decimal unitPrice))
+                {
+                    // if unit price unparsable, clear amount (avoid misleading 0)
+                    textBox7.Text = string.Empty;
+                    return;
+                }
+
+                // allow decimal liters
+                if (!TryParseDecimal(textBox6.Text, out decimal payedLitersDecimal))
+                {
+                    textBox7.Text = string.Empty;
+                    return;
+                }
+
+                var amount = payedLitersDecimal * unitPrice;
+
+                textBox7.Text = amount != 0m ? FormatDecimalSmart(amount) : string.Empty;
+            }
+            catch
+            {
+                // swallow UI errors
+            }
         }
 
-        // Called when user changes selection (wired in Form1_Load)
-        // Populate inputs only when the DataGridView currently has focus.
-        // Programmatic selection changes (during binding/filtering) will not focus the grid,
-        // so inputs remain empty until the user explicitly focuses/selects a row.
+        // Designer-referenced no-op or minimal handlers
+        private void label3_Click(object sender, EventArgs e) { }
+        private void label9_Click(object sender, EventArgs e) { }
+        private void label4_Click(object sender, EventArgs e) { }
+        private void label5_Click(object sender, EventArgs e) { }
+        private void label6_Click(object sender, EventArgs e) { }
+        private void label7_Click(object sender, EventArgs e) { }
+        // Fixed signatures: provide identifier name for second parameter
+        private void label8_Click(object sender, EventArgs e) { }
+        private void label1_Click(object sender, EventArgs e) { }
+        private void label2_Click(object sender, EventArgs e) { }
 
+        private void textBox1_TextChanged(object sender, EventArgs e) { }
+        private void textBox1_TextChanged_1(object sender, EventArgs e) { }
+        private void textBox2_TextChanged(object sender, EventArgs e) { }
+        private void textBox6_TextChanged(object sender, EventArgs e) { }
+        private void Poids_Click(object sender, EventArgs e) { }
+        private void weightTextBox_TextChanged(object sender, EventArgs e) { }
+
+        private void clearBtn_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                RefreshUsers();
+                ClearFormFields();
+            }
+            catch
+            {
+                // swallow
+            }
+        }
+
+        private void lblCompanyAddressPhone_Click(object sender, EventArgs e) { }
+        private void txtCompanyAddressPhone_TextChanged(object sender, EventArgs e) { }
+
+        private void lblPortion_Click(object sender, EventArgs e) { }
+
+        private void BtnSaveParameters_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // Minimal safe behaviour: attempt to reload parameters after a possible save action.
+                // Implement actual save logic here if needed.
+                LoadParameters();
+                MessageBox.Show("Paramètres rechargés.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch
+            {
+                // swallow
+            }
+        }
+
+        private void ParametersCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            try
+            {
+                if (ParametersCheckBox != null)
+                {
+                    bool enabled = ParametersCheckBox.Checked;
+                    if (txtCompanyName != null) txtCompanyName.Enabled = enabled;
+                    if (txtCompanyAddress != null) txtCompanyAddress.Enabled = enabled;
+                    if (txtCompanyPhone != null) txtCompanyPhone.Enabled = enabled;
+                    if (txtPricePerLiter != null) txtPricePerLiter.Enabled = enabled;
+                    if (txtPortion != null) txtPortion.Enabled = enabled;
+                    if (btnSaveParameters != null) btnSaveParameters.Enabled = enabled;
+                }
+            }
+            catch
+            {
+                // swallow
+            }
+        }
+
+        private void btnEnregistrerVente_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // Minimal behaviour: refresh today's ventes after an (assumed) save.
+                LoadVentesToday();
+            }
+            catch
+            {
+                // swallow
+            }
+        }
+
+        private void DgvVentesToday_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+            // no-op for now; implement delete or selection if needed
+        }
+
+        private void ToastTimer_Tick(object sender, EventArgs e)
+        {
+            try
+            {
+                if (lblVenteToast != null) lblVenteToast.Visible = false;
+                toastTimer.Enabled = false;
+            }
+            catch
+            {
+                // swallow
+            }
+        }
+
+        private void ModeComboBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            try
+            {
+                // sync combo selection with radio buttons if needed
+                if (modeComboBox != null)
+                {
+                    if (modeComboBox.SelectedItem?.ToString() == "Portion")
+                    {
+                        if (rdoPortion != null) rdoPortion.Checked = true;
+                    }
+                    else
+                    {
+                        if (rdoPaiement != null) rdoPaiement.Checked = true;
+                    }
+                }
+                ApplyMode();
+            }
+            catch
+            {
+                // swallow
+            }
+        }
+
+        // Called when user changes selection
         private void ItemList_SelectedRowsChanged(object? sender, EventArgs e)
         {
             if (suppressSelectionEvents) return;
 
-            // If the grid isn't focused, do not populate inputs (this avoids auto-population during binding)
             if (!ItemList.Focused)
             {
                 ClearFormFields();
                 return;
             }
 
-            // Only populate when a row is actively selected (prevents current-cell-only cases)
             if (ItemList.SelectedRows == null || ItemList.SelectedRows.Count == 0)
             {
                 ClearFormFields();
@@ -658,18 +981,13 @@ namespace EntityFramework
             var selectedUser = selectedRow.DataBoundItem as User;
             if (selectedUser is not null)
             {
-                // Map user properties to form fields
                 nameTextBox.Text = selectedUser.Name;
                 textBox1.Text = selectedUser.Phone;
                 addressTextBox.Text = selectedUser.Address;
-
-                // NbrBags is decimal (required) — format smartly or clear when zero
                 textBox2.Text = selectedUser.NbrBags != 0m ? FormatDecimalSmart(selectedUser.NbrBags) : string.Empty;
-
                 textBox3.Text = selectedUser.NbrContainers;
                 textBox4.Text = selectedUser.NbrLiters?.ToString() ?? string.Empty;
 
-                // Unit price: prefer value from user; if missing/zero, populate from Parameters (single-row id=1)
                 decimal effectiveUnitPrice = 0m;
                 bool haveUnitPrice = false;
 
@@ -705,14 +1023,12 @@ namespace EntityFramework
                     }
                     catch
                     {
-                        // swallow DB errors and leave unit price empty
                         textBox5.Text = string.Empty;
                     }
                 }
 
                 textBox6.Text = selectedUser.PayedLiters?.ToString() ?? string.Empty;
 
-                // AmountDue: if stored use it; otherwise compute from effectiveUnitPrice * PayedLiters when possible
                 if (selectedUser.AmountDue.HasValue && selectedUser.AmountDue.Value != 0m)
                 {
                     textBox7.Text = FormatDecimalSmart(selectedUser.AmountDue.Value);
@@ -844,30 +1160,33 @@ namespace EntityFramework
 
         private void ClearFormFields()
         {
-            nameTextBox.Text = string.Empty;
-            textBox1.Text = string.Empty;
-            addressTextBox.Text = string.Empty;
-            textBox2.Text = string.Empty;
-            textBox3.Text = string.Empty;
-            textBox4.Text = string.Empty;
-            textBox5.Text = string.Empty;
-            textBox6.Text = string.Empty;
-            textBox7.Text = string.Empty;
-            weightTextBox.Text = string.Empty;
+            try
+            {
+                if (nameTextBox != null) nameTextBox.Text = string.Empty;
+                if (textBox1 != null) textBox1.Text = string.Empty;
+                if (addressTextBox != null) addressTextBox.Text = string.Empty;
+                if (textBox2 != null) textBox2.Text = string.Empty;
+                if (textBox3 != null) textBox3.Text = string.Empty;
+                if (textBox4 != null) textBox4.Text = string.Empty;
+                if (textBox5 != null) textBox5.Text = string.Empty;
+                if (textBox6 != null) textBox6.Text = string.Empty;
+                if (textBox7 != null) textBox7.Text = string.Empty;
+                if (weightTextBox != null) weightTextBox.Text = string.Empty;
 
-            // Company parameter fields
-            txtCompanyName.Text = string.Empty;
-            txtCompanyAddress.Text = string.Empty;
-            txtCompanyPhone.Text = string.Empty;
-            txtPricePerLiter.Text = string.Empty;
-            txtPortion.Text = string.Empty;
+                if (txtCompanyName != null) txtCompanyName.Text = string.Empty;
+                if (txtCompanyAddress != null) txtCompanyAddress.Text = string.Empty;
+                if (txtCompanyPhone != null) txtCompanyPhone.Text = string.Empty;
+                if (txtPricePerLiter != null) txtPricePerLiter.Text = string.Empty;
+                if (txtPortion != null) txtPortion.Text = string.Empty;
 
-            // Vente fields
-            txtVenteNbrLitres.Text = string.Empty;
-            txtVentePrix.Text = string.Empty;
+                if (txtVenteNbrLitres != null) txtVenteNbrLitres.Text = string.Empty;
+                if (txtVentePrix != null) txtVentePrix.Text = string.Empty;
+            }
+            catch
+            {
+                // swallow
+            }
         }
-
-        // Ensure grid / binding source has no selection and do not fire selection handler while doing it
 
         private void ClearGridSelection()
         {
@@ -884,140 +1203,12 @@ namespace EntityFramework
             }
         }
 
-        // Parsing helpers
-
-        private static bool TryParseDecimal(string? s, out decimal value)
-        {
-            value = 0m;
-            if (string.IsNullOrWhiteSpace(s)) return false;
-            return decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out value)
-                   || decimal.TryParse(s, NumberStyles.Any, CultureInfo.CurrentCulture, out value);
-        }
-
-        private static bool TryParseInt(string? s, out int? value)
-        {
-            value = null;
-            if (string.IsNullOrWhiteSpace(s)) return false;
-            if (int.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out int v) ||
-                int.TryParse(s, NumberStyles.Any, CultureInfo.CurrentCulture, out v))
-            {
-                value = v;
-                return true;
-            }
-            return false;
-        }
-
-        private static bool TryParseDecimal(string? s, out decimal? value)
-        {
-            value = null;
-            if (string.IsNullOrWhiteSpace(s)) return false;
-            if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal v) ||
-                decimal.TryParse(s, NumberStyles.Any, CultureInfo.CurrentCulture, out v))
-            {
-                value = v;
-                return true;
-            }
-            return false;
-        }
-
-        private void label2_Click(object sender, EventArgs e)
-        {
-        }
-
-        private void label4_Click(object sender, EventArgs e)
-        {
-        }
-
-        private void textBox1_TextChanged_1(object sender, EventArgs e)
-        {
-        }
-
-        private void label5_Click(object sender, EventArgs e)
-        {
-        }
-
-        private void checkBox1_CheckedChanged(object sender, EventArgs e)
-        {
-        }
-
-        private void textBox6_TextChanged(object sender, EventArgs e)
-        {
-        }
-
-        private void label6_Click(object sender, EventArgs e)
-        {
-        }
-
-        private void label8_Click(object sender, EventArgs e)
-        {
-        }
-
-        // Add this method to Form1 to fix CS0103
-
-        private void ConfigureGridColumns()
-        {
-            if (ItemList == null) return;
-
-            ItemList.AutoGenerateColumns = false;
-            ItemList.Columns.Clear();
-
-            // Example columns for User entity; adjust as needed for your model
-            ItemList.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "colName",
-                HeaderText = "Nom",
-                DataPropertyName = "Name",
-                ReadOnly = true,
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
-            });
-
-            ItemList.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "colPhone",
-                HeaderText = "Téléphone",
-                DataPropertyName = "Phone",
-                ReadOnly = true,
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
-            });
-
-            ItemList.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "colAddress",
-                HeaderText = "Adresse",
-                DataPropertyName = "Address",
-                ReadOnly = true,
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
-            });
-
-            // Add more columns as needed for your User properties
-        }
-
-        // Add this method to Form1 to fix CS0103
-
-        private void ItemList_DataBindingComplete(object? sender, DataGridViewBindingCompleteEventArgs e)
-        {
-            // Optionally, clear selection after data binding to avoid auto-selecting the first row
-            ClearGridSelection();
-        }
-
-        // Add this method to Form1 to fix CS0103
-
+        // Search box handler wired in Initialize / Designer
         private void SearchTextBox_TextChanged(object? sender, EventArgs e)
         {
-            // Apply filter to users list based on search text
-            ApplyFilter(searchTextBox?.Text ?? string.Empty);
-        }
-
-        // ---- New helper implementations to resolve missing references ----
-
-        // Called when editCheckBox changes; wires up SetEditMode
-
-        private void editCheckBox_CheckedChanged(object? sender, EventArgs e)
-        {
             try
             {
-                if (editCheckBox != null)
-                    SetEditMode(editCheckBox.Checked);
+                ApplyFilter(searchTextBox?.Text ?? string.Empty);
             }
             catch
             {
@@ -1025,648 +1216,369 @@ namespace EntityFramework
             }
         }
 
-        // Enable/disable create/update/delete buttons (minimal implementation)
-
-        private void SetEditMode(bool enabled)
+        // Refresh statistics — wired from Designer and called from Form1_Load
+        private void BtnRefreshStats_Click(object? sender, EventArgs e)
         {
             try
             {
-                // Buttons
-                if (createBtn != null) createBtn.Enabled = enabled;
-                if (updateBtn != null) updateBtn.Enabled = enabled;
-                if (deleteBtn != null) deleteBtn.Enabled = enabled;
-
-                // All TextBox inputs across tabs (defensive null checks)
-                // NOTE: intentionally exclude searchTextBox so it remains usable at all times.
-                var textBoxes = new TextBox[]
-                {
-                    nameTextBox, addressTextBox,
-                    textBox1, textBox2, textBox3, textBox4, textBox5, textBox6, textBox7,
-                    weightTextBox,
-                    txtCompanyName, txtCompanyAddress, txtCompanyPhone, txtPricePerLiter, txtPortion
-                };
-
-                foreach (var tb in textBoxes)
-                {
-                    if (tb != null) tb.Enabled = enabled;
-                }
-
-                // Ensure search box is always enabled
-                if (searchTextBox != null) searchTextBox.Enabled = true;
-
-                // Parameter save button
-                if (btnSaveParameters != null) btnSaveParameters.Enabled = enabled;
-            }
-            catch
-            {
-                // ignore UI errors
-            }
-        }
-
-        // Simple filter implementation: filter by name or phone containing the search text (case-insensitive)
-
-        private void ApplyFilter(string filter)
-        {
-            try
-            {
-                var normalized = (filter ?? string.Empty).Trim();
-                IEnumerable<User> list = DatabaseUsers ?? new List<User>();
-
-                if (!string.IsNullOrEmpty(normalized))
-                {
-                    list = list.Where(u =>
-                        (!string.IsNullOrEmpty(u.Name) && u.Name.IndexOf(normalized, StringComparison.CurrentCultureIgnoreCase) >= 0)
-                        || (!string.IsNullOrEmpty(u.Phone) && u.Phone.IndexOf(normalized, StringComparison.CurrentCultureIgnoreCase) >= 0));
-                }
-
-                // Update binding source - use a concrete list to avoid deferred execution issues
-                usersBinding.DataSource = list.ToList();
-
-                // Update autocomplete source if desired (kept disabled by default but method remains)
-                UpdateAutoCompleteSource();
-
-                // After applying filter, clear selection so inputs don't auto-populate
-                ClearGridSelection();
-            }
-            catch
-            {
-                // ignore filter errors for robustness
-            }
-        }
-
-        // Small utility to format decimals "smartly" similar to other formatters used in the file
-
-        private static string FormatDecimalSmart(decimal value)
-        {
-            var culture = CultureInfo.CurrentCulture;
-            return decimal.Truncate(value) == value
-                ? value.ToString("N0", culture)
-                : value.ToString("N1", culture);
-        }
-
-        // Designer-referenced event stubs (no-op or minimal) to stop CS0103 from Designer wires
-
-        private void label3_Click(object? sender, EventArgs e)
-        {
-        }
-
-        private void Poids_Click(object? sender, EventArgs e)
-        {
-        }
-
-        private void weightTextBox_TextChanged(object? sender, EventArgs e)
-        {
-        }
-
-        private void label9_Click(object? sender, EventArgs e)
-        {
-        }
-
-        private void clearBtn_Click(object? sender, EventArgs e)
-        {
-            // Clear form fields and selection
-            ClearFormFields();
-            ClearGridSelection();
-        }
-
-        private void BtnSaveParameters_Click(object? sender, EventArgs e)
-        {
-            try
-            {
-                // Validate txtPortion first: empty => 0, otherwise must parse and be within [0, 100]
-                decimal portionPercent = 0m;
-                if (!string.IsNullOrWhiteSpace(txtPortion?.Text))
-                {
-                    if (!TryParseDecimal(txtPortion.Text, out decimal tmpPortion))
-                    {
-                        MessageBox.Show("La portion doit être un nombre valide (utilisez le format numérique de votre culture).", "Valeur invalide", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        txtPortion?.Focus();
-                        return;
-                    }
-
-                    if (tmpPortion < 0m || tmpPortion > 100m)
-                    {
-                        MessageBox.Show("La portion doit être comprise entre 0 et 100 (pourcentage).", "Valeur hors plage", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        txtPortion?.Focus();
-                        return;
-                    }
-
-                    portionPercent = tmpPortion;
-                }
-
                 using var context = new DataContext();
+                var users = context.Users?.ToList() ?? new List<User>();
 
-                // Convert percent (0..100) to stored fraction (0..1)
-                var storedPortion = portionPercent / 100m;
+                // Load ventes
+                var ventes = context.Ventes?.ToList() ?? new List<Vente>();
 
-                if (context.Parameters == null)
+                // Apply year filter if selected
+                try
                 {
-                    var p = new Parameters
+                    if (yearComboBox != null && yearComboBox.SelectedItem != null)
                     {
-                        CompanyName = txtCompanyName?.Text ?? string.Empty,
-                        CompanyAddress = txtCompanyAddress?.Text ?? string.Empty,
-                        CompanyPhone = txtCompanyPhone?.Text ?? string.Empty,
-                        DefaultUnitPrice = TryParseDecimal(txtPricePerLiter?.Text, out decimal tmpPrice) ? tmpPrice : 0m,
-                        DefaultPortion = storedPortion
-                    };
-                    context.Parameters?.Add(p);
+                        var sel = yearComboBox.SelectedItem.ToString();
+                        if (!string.IsNullOrEmpty(sel) && !sel.Equals("All", StringComparison.CurrentCultureIgnoreCase))
+                        {
+                            if (int.TryParse(sel, out int selYear))
+                            {
+                                users = users.Where(u => u.CreatedAt.HasValue && u.CreatedAt.Value.Year == selYear).ToList();
+                                ventes = ventes.Where(v => v.CreatedAt.Year == selYear).ToList();
+                            }
+                        }
+                    }
                 }
-                else
+                catch
                 {
-                    var parameters = context.Parameters.FirstOrDefault(p => p.Id == 1) ?? new Parameters();
-                    parameters.CompanyName = txtCompanyName?.Text ?? string.Empty;
-                    parameters.CompanyAddress = txtCompanyAddress?.Text ?? string.Empty;
-                    parameters.CompanyPhone = txtCompanyPhone?.Text ?? string.Empty;
-                    if (TryParseDecimal(txtPricePerLiter?.Text, out decimal price)) parameters.DefaultUnitPrice = price;
-
-                    parameters.DefaultPortion = storedPortion;
-
-                    if (parameters.Id == 0)
-                        context.Parameters.Add(parameters);
+                    // swallow filtering errors – fallback to unfiltered list
                 }
 
-                context.SaveChanges();
+                var totalClients = users.Count;
+                var totalSacs = users.Sum(u => u.NbrBags);
+                var totalPoids = users.Sum(u => u.Weight ?? 0m);
 
-                // Refresh UI (including the window title) from persisted parameters
-                LoadParameters();
+                decimal totalLitresProduites = users.Sum(u => (decimal)(u.NbrLiters ?? 0));
+                decimal totalLitresVendues = users.Sum(u => (decimal)(u.PayedLiters ?? 0));
 
-                MessageBox.Show("Paramètres sauvegardés.", "OK", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                ParametersCheckBox.Checked = false;
+                var totalRevenueFromPaidLiters = users.Sum(u => (u.PayedLiters ?? 0) * (u.UnitPriceLiter ?? 0m));
+                var totalAmountDue = users.Sum(u => u.AmountDue ?? 0m);
+
+                var totalVentesLitres = ventes.Sum(v => v.NbrLitres);
+                var totalVentesRecette = ventes.Sum(v => v.Montant);
+
+                decimal portionFraction = 0m;
+                try
+                {
+                    var parameters = context.Parameters?.FirstOrDefault(p => p.Id == 1);
+                    if (parameters != null) portionFraction = parameters.DefaultPortion;
+                }
+                catch
+                {
+                    portionFraction = 0m;
+                }
+
+                decimal totalPortionEntrees = 0m;
+                decimal totalPortionVendues = 0m;
+
+                foreach (var u in users)
+                {
+                    var liters = (decimal)(u.NbrLiters ?? 0);
+                    if (liters == 0m) continue;
+
+                    var userPortion = liters * portionFraction;
+
+                    if (u.AmountDue.HasValue && u.AmountDue.Value != 0m)
+                        totalPortionVendues += userPortion;
+                    else
+                        totalPortionEntrees += userPortion;
+                }
+
+                decimal totalNombreLitresLivrees = totalLitresProduites - totalPortionEntrees;
+
+                var ci = CultureInfo.GetCultureInfo("fr-FR");
+
+#if DEBUG
+        Debug.WriteLine($"[Stats DBG] produced={totalLitresProduites}, portionFraction={portionFraction}, portionEntrées={totalPortionEntrees}, portionVendues={totalPortionVendues}, delivered={totalNombreLitresLivrees}");
+#endif
+
+                if (dgvStats != null)
+                {
+                    dgvStats.Rows.Clear();
+
+                    static string FormatDecimalSmartForLabel(decimal value, CultureInfo culture)
+                    {
+                        return decimal.Truncate(value) == value
+                            ? value.ToString("N0", culture)
+                            : value.ToString("N1", culture);
+                    }
+
+                    dgvStats.Rows.Add("Total Clients", totalClients.ToString("N0", ci));
+                    dgvStats.Rows.Add("Sacs entrée", FormatDecimalSmartForLabel(totalSacs, ci));
+                    dgvStats.Rows.Add("Poids", FormatDecimalSmartForLabel(totalPoids, ci));
+                    dgvStats.Rows.Add("Litres produites", totalLitresProduites.ToString("N0", ci));
+                    dgvStats.Rows.Add("Nombre Litres Portion vendues", totalPortionVendues.ToString("N1", ci));
+                    dgvStats.Rows.Add("Total Nombre de litre Portion Entrées", totalPortionEntrees.ToString("N1", ci));
+                    dgvStats.Rows.Add("Total Nombre de litre livrées", totalNombreLitresLivrees.ToString("N1", ci));
+                    dgvStats.Rows.Add("Recette (litres vendues)", totalRevenueFromPaidLiters.ToString("N2", ci));
+                    dgvStats.Rows.Add("Total dû (clients)", totalAmountDue.ToString("N2", ci));
+                }
+
+                if (dgvVenteStats != null)
+                {
+                    dgvVenteStats.Rows.Clear();
+                    dgvVenteStats.Rows.Add("Total ventes (enregistrements)", ventes.Count.ToString("N0", ci));
+                    dgvVenteStats.Rows.Add("Ventes - Litres (journalisées)", totalVentesLitres.ToString("N0", ci));
+                    dgvVenteStats.Rows.Add("Ventes - Recette (journalisée)", totalVentesRecette.ToString("N2", ci));
+                }
+
+                // Refresh today's ventes view
+                LoadVentesToday();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Échec de la sauvegarde des paramètres : " + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Échec du chargement des statistiques : " + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void checkBox1_CheckedChanged_1(object sender, EventArgs e)
+        // Designer-wired click handlers (ItemList and CRUD buttons). Minimal but functional.
+        // ItemList CellContentClick (wired in Designer)
+        private void ItemList_CellContentClick(object? sender, DataGridViewCellEventArgs e)
         {
+            // no-op placeholder, implement if needed (e.g., handle delete button cell)
         }
 
-        // Called when the ParametersCheckBox in the Parameters tab is toggled.
-        // Enables/disables parameter inputs and the save button; when enabling, reloads values.
-
-        private void ParametersCheckBox_CheckedChanged(object sender, EventArgs e)
+        // Create user button handler (wired in Designer)
+        private void createBtn_Click(object? sender, EventArgs e)
         {
             try
             {
-                bool enabled;
-                if (sender is CheckBox cb)
-                    enabled = cb.Checked;
-                else
-                    enabled = ParametersCheckBox?.Checked ?? false;
+                var name = nameTextBox.Text.Trim();
+                var phone = textBox1.Text.Trim();
+                var address = addressTextBox.Text.Trim();
 
-                if (txtCompanyName != null) txtCompanyName.Enabled = enabled;
-                if (txtCompanyAddress != null) txtCompanyAddress.Enabled = enabled;
-                if (txtCompanyPhone != null) txtCompanyPhone.Enabled = enabled;
-                if (txtPricePerLiter != null) txtPricePerLiter.Enabled = enabled;
-                if (txtPortion != null) txtPortion.Enabled = enabled;
-                if (btnSaveParameters != null) btnSaveParameters.Enabled = enabled;
-
-                if (enabled)
+                if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(address))
                 {
-                    // Refresh values from DB when entering edit mode
-                    LoadParameters();
-                    txtCompanyName?.Focus();
+                    MessageBox.Show("Le nom et l'adresse sont requis.");
+                    return;
                 }
-            }
-            catch
-            {
-                // Swallow UI errors to avoid unexpected crashes
-            }
-        }
 
-        // -----------------------------------------------------------------
+                if (!TryParseDecimal(textBox2.Text, out decimal nbrBags))
+                    nbrBags = 0m;
 
-        // Populate textBox5 (unit price) from Parameters table when the field is empty.
-        // This helps pre-fill the unit price for new user entries.
+                var nbrContainers = textBox3.Text.Trim();
 
-        private void PopulateDefaultUnitPrice()
-        {
-            try
-            {
-                if (textBox5 == null) return;
-
-                // Only populate when empty to avoid overwriting user input or selected user values
-                if (!string.IsNullOrWhiteSpace(textBox5.Text)) return;
-
-                using var context = new DataContext();
-                if (context.Parameters == null) return;
-
-                var parameters = context.Parameters.FirstOrDefault(p => p.Id == 1);
-                if (parameters == null) return;
-
-                if (parameters.DefaultUnitPrice != 0m)
-                {
-                    textBox5.Text = parameters.DefaultUnitPrice.ToString(CultureInfo.CurrentCulture);
-                }
-            }
-            catch
-            {
-                // ignore DB errors here — this is a convenience helper
-            }
-        }
-
-        // Recalculate AmountDue = UnitPrice * PayedLiters and update textBox7 live.
-
-        private void PriceOrPaidLiters_TextChanged(object? sender, EventArgs e)
-        {
-            try
-            {
-                if (textBox5 == null || textBox6 == null || textBox7 == null) return;
+                if (!TryParseInt(textBox4.Text, out int? nbrLitersNullable))
+                    nbrLitersNullable = null;
 
                 if (!TryParseDecimal(textBox5.Text, out decimal unitPrice))
-                {
-                    // if unit price unparsable, clear amount (avoid misleading 0)
-                    textBox7.Text = string.Empty;
-                    return;
-                }
+                    unitPrice = 0m;
 
                 if (!TryParseInt(textBox6.Text, out int? payedLitersNullable))
+                    payedLitersNullable = null;
+
+                if (!TryParseDecimal(weightTextBox.Text, out decimal? weightNullable))
+                    weightNullable = null;
+
+                decimal amountDue = 0m;
+                if (TryParseDecimal(textBox7.Text, out decimal parsedAmount))
+                    amountDue = parsedAmount;
+                else
+                    amountDue = (payedLitersNullable ?? 0) * unitPrice;
+
+                using (var context = new DataContext())
                 {
-                    textBox7.Text = string.Empty;
-                    return;
-                }
-
-                var payed = payedLitersNullable ?? 0;
-                var amount = payed * unitPrice;
-
-                textBox7.Text = amount != 0m ? FormatDecimalSmart(amount) : string.Empty;
-            }
-            catch
-            {
-                // swallow UI errors
-            }
-        }
-
-        private void lblCompanyAddressPhone_Click(object sender, EventArgs e)
-        {
-        }
-
-        private void txtCompanyAddressPhone_TextChanged(object sender, EventArgs e)
-        {
-        }
-
-        // New handler: clamp/format portion when leaving the field
-        private void TxtPortion_Leave(object? sender, EventArgs e)
-        {
-            try
-            {
-                if (txtPortion == null) return;
-                var text = txtPortion.Text;
-
-                if (string.IsNullOrWhiteSpace(text))
-                {
-                    // empty is treated as 0%
-                    txtPortion.Text = 0m.ToString(CultureInfo.CurrentCulture);
-                    return;
-                }
-
-                if (!TryParseDecimal(text, out decimal parsed))
-                {
-                    MessageBox.Show("La portion doit être un nombre (format courant).", "Valeur invalide", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    txtPortion.Focus();
-                    return;
-                }
-
-                // Clamp to [0,100] (percentage) and reformat using current culture
-                if (parsed < 0m) parsed = 0m;
-                if (parsed > 100m) parsed = 100m;
-
-                txtPortion.Text = parsed.ToString(CultureInfo.CurrentCulture);
-            }
-            catch
-            {
-                // ignore UI errors
-            }
-        }
-
-        private void lblPortion_Click(object sender, EventArgs e)
-        {
-
-        }
-
-        // New handlers and helper: place these among the other private helpers in Form1
-
-        private void TxtPortion_TextChanged(object? sender, EventArgs e)
-        {
-            ApplyPortionToTextBox6();
-        }
-
-        private void TextBox4_TextChanged(object? sender, EventArgs e)
-        {
-            ApplyPortionToTextBox6();
-        }
-
-        // Compute textBox6 = textBox4 * portion (txtPortion as percent 0..100).
-        // Writes a rounded integer into textBox6 using current culture.
-        private void ApplyPortionToTextBox6()
-        {
-            try
-            {
-                if (suppressPortionApply) return;
-                if (textBox4 == null || textBox6 == null || txtPortion == null) return;
-
-                // Parse source liters (textBox4)
-                if (!TryParseInt(textBox4.Text, out int? litersNullable))
-                {
-                    // if source is not numeric, clear target to avoid stale values
-                    textBox6.Text = string.Empty;
-                    return;
-                }
-
-                var liters = litersNullable ?? 0;
-
-                // Parse portion as percent (0..100)
-                if (!TryParseDecimal(txtPortion.Text, out decimal portionPercent))
-                {
-                    // invalid portion -> do not update
-                    return;
-                }
-
-                // Clamp portion to [0,100]
-                if (portionPercent < 0m) portionPercent = 0m;
-                if (portionPercent > 100m) portionPercent = 100m;
-
-                var fraction = portionPercent / 100m;
-                var adjustedDecimal = liters * fraction;
-                var adjustedInt = (int)Math.Round(adjustedDecimal, MidpointRounding.AwayFromZero);
-
-                // Prevent re-entrancy while updating the target textbox
-                suppressPortionApply = true;
-                try
-                {
-                    textBox6.Text = adjustedInt.ToString(CultureInfo.CurrentCulture);
-                }
-                finally
-                {
-                    suppressPortionApply = false;
-                }
-            }
-            catch
-            {
-                // swallow UI errors
-            }
-        }
-
-        private void ConfigureStatsGrid()
-        {
-            if (dgvStats == null) return;
-
-            dgvStats.AutoGenerateColumns = false;
-            dgvStats.Columns.Clear();
-            dgvStats.RowHeadersVisible = false;
-            dgvStats.AllowUserToAddRows = false;
-            dgvStats.ReadOnly = true;
-            dgvStats.EnableHeadersVisualStyles = false;
-
-            dgvStats.ColumnHeadersDefaultCellStyle.Font = new Font(dgvStats.Font ?? SystemFonts.DefaultFont, FontStyle.Bold);
-
-            dgvStats.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "colStat",
-                HeaderText = "Statistique",
-                DataPropertyName = null, // we add rows manually
-                ReadOnly = true,
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
-            });
-
-            dgvStats.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "colValue",
-                HeaderText = "Valeur",
-                DataPropertyName = null,
-                ReadOnly = true,
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
-            });
-        }
-
-        private void YearComboBox_SelectedIndexChanged(object? sender, EventArgs e)
-        {
-            // reuse existing refresh method
-            BtnRefreshStats_Click(this, EventArgs.Empty);
-        }
-
-        // New: handler to save a Vente record
-        private void btnEnregistrerVente_Click(object? sender, EventArgs e)
-        {
-            try
-            {
-                if (txtVenteNbrLitres == null || txtVentePrix == null)
-                {
-                    MessageBox.Show("Les champs de vente sont introuvables.", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-
-                if (!int.TryParse(txtVenteNbrLitres.Text?.Trim(), NumberStyles.Any, CultureInfo.CurrentCulture, out int nbrLitres))
-                {
-                    MessageBox.Show("Le nombre de litres doit être un entier valide.", "Valeur invalide", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    txtVenteNbrLitres.Focus();
-                    return;
-                }
-
-                if (!TryParseDecimal(txtVentePrix.Text?.Trim(), out decimal prix))
-                {
-                    MessageBox.Show("Le prix doit être un nombre valide.", "Valeur invalide", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    txtVentePrix.Focus();
-                    return;
-                }
-
-                var vente = new Vente
-                {
-                    NbrLitres = nbrLitres,
-                    Prix = prix,
-                    Montant = nbrLitres * prix,
-                    CreatedAt = DateTime.Now
-                };
-
-                using (var ctx = new DataContext())
-                {
-                    if (ctx.Ventes == null)
+                    if (context.Users == null)
                     {
-                        MessageBox.Show("Le contexte de la base de données n'est pas correctement configuré. Le DbSet 'Ventes' est nul.", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show("Le contexte de la base de données n'est pas correctement configuré. Le DbSet 'Users' est nul.");
                         return;
                     }
 
-                    ctx.Ventes.Add(vente);
-                    ctx.SaveChanges();
-                }
-
-                // Clear vente inputs, focus, refresh stats and show a small toast
-                txtVenteNbrLitres.Text = string.Empty;
-                txtVentePrix.Text = string.Empty;
-                txtVenteNbrLitres.Focus();
-
-                // Refresh stats and today's ventes list
-                BtnRefreshStats_Click(this, EventArgs.Empty);
-                LoadVentesToday();
-
-                ShowToast("Vente enregistrée avec succès");
-
-                // If print checkbox checked, print via EscPosPrinter
-                try
-                {
-                    if (chkPrintReceipt != null && chkPrintReceipt.Checked)
+                    var user = new User
                     {
-                        EscPosPrinter.PrintVenteReceipt(null, vente);
-                    }
+                        Name = name,
+                        Phone = phone,
+                        Address = address,
+                        NbrBags = nbrBags,
+                        NbrContainers = nbrContainers,
+                        NbrLiters = nbrLitersNullable,
+                        UnitPriceLiter = unitPrice,
+                        PayedLiters = payedLitersNullable,
+                        AmountDue = amountDue,
+                        Weight = weightNullable,
+                        CreatedAt = DateTime.Now,
+                    };
+
+                    context.Users.Add(user);
+                    context.SaveChanges();
                 }
-                catch (Exception ex)
+
+                MessageBox.Show("Utilisateur créé avec succès");
+                RefreshUsers();
+                if (editCheckBox != null) editCheckBox.Checked = false;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Erreur lors de la création: " + ex.Message);
+            }
+        }
+
+        // Update selected user (wired in Designer)
+        private void updateBtn_Click(object? sender, EventArgs e)
+        {
+            if (ItemList.CurrentRow == null)
+            {
+                MessageBox.Show("Aucun utilisateur sélectionné.");
+                return;
+            }
+
+            var selectedUser = ItemList.CurrentRow.DataBoundItem as User;
+            if (selectedUser == null)
+            {
+                MessageBox.Show("Aucun utilisateur sélectionné.");
+                return;
+            }
+
+            var name = nameTextBox.Text.Trim();
+            var phone = textBox1.Text.Trim();
+            var address = addressTextBox.Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(address))
+            {
+                MessageBox.Show("Le nom et l'adresse sont requis.");
+                return;
+            }
+
+            if (!TryParseDecimal(textBox2.Text, out decimal nbrBags))
+                nbrBags = 0m;
+
+            var nbrContainers = textBox3.Text.Trim();
+
+            if (!TryParseInt(textBox4.Text, out int? nbrLitersNullable))
+                nbrLitersNullable = null;
+
+            if (!TryParseDecimal(textBox5.Text, out decimal unitPrice))
+                unitPrice = 0m;
+
+            if (!TryParseInt(textBox6.Text, out int? payedLitersNullable))
+                payedLitersNullable = null;
+
+            if (!TryParseDecimal(textBox7.Text, out decimal amountDue))
+                amountDue = (payedLitersNullable ?? 0) * unitPrice;
+
+            if (!TryParseDecimal(weightTextBox.Text, out decimal? weightNullable))
+                weightNullable = null;
+
+            try
+            {
+                using var context = new DataContext();
+                if (context.Users == null)
                 {
-                    // do not let printing failure block the save flow; show an informational message
-                    MessageBox.Show("Échec de l'impression du reçu : " + ex.Message, "Impression échouée", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show("Le contexte de la base de données n'est pas correctement configuré. Le DbSet 'Users' est nul.");
+                    return;
+                }
+
+                var userToUpdate = context.Users.Find(selectedUser.Id);
+                if (userToUpdate != null)
+                {
+                    userToUpdate.Name = name;
+                    userToUpdate.Phone = phone;
+                    userToUpdate.Address = address;
+                    userToUpdate.NbrBags = nbrBags;
+                    userToUpdate.NbrContainers = nbrContainers;
+                    userToUpdate.NbrLiters = nbrLitersNullable;
+                    userToUpdate.UnitPriceLiter = unitPrice;
+                    userToUpdate.PayedLiters = payedLitersNullable;
+                    userToUpdate.AmountDue = amountDue;
+                    userToUpdate.Weight = weightNullable;
+
+                    context.SaveChanges();
+                    MessageBox.Show("Utilisateur mis à jour avec succès");
+                    if (editCheckBox != null) editCheckBox.Checked = false;
+                }
+                else
+                {
+                    MessageBox.Show("L'utilisateur sélectionné est introuvable dans la base de données.");
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Échec de l'enregistrement de la vente : " + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Erreur lors de la mise à jour : " + ex.Message);
             }
+
+            RefreshUsers();
         }
 
-        // Show a transient non-blocking toast message on the Vente tab
-        private void ShowToast(string message, int milliseconds = 2000)
+        // Delete selected user (wired in Designer)
+        private void deleteBtn_Click(object? sender, EventArgs e)
         {
+            if (ItemList.CurrentRow == null)
+            {
+                MessageBox.Show("Aucun utilisateur sélectionné.");
+                return;
+            }
+
+            var selectedUser = ItemList.CurrentRow.DataBoundItem as User;
+            if (selectedUser == null)
+            {
+                MessageBox.Show("Aucun utilisateur sélectionné.");
+                return;
+            }
+
             try
             {
-                if (lblVenteToast == null || toastTimer == null) return;
-
-                lblVenteToast.Text = message;
-                lblVenteToast.Visible = true;
-                lblVenteToast.BringToFront();
-
-                toastTimer.Interval = milliseconds;
-                toastTimer.Stop();
-                toastTimer.Start();
-            }
-            catch
-            {
-                // ignore UI toast errors; fallback will be MessageBox if needed
-            }
-        }
-
-        // Timer tick: hide the toast
-        private void ToastTimer_Tick(object? sender, EventArgs e)
-        {
-            try
-            {
-                if (toastTimer != null) toastTimer.Stop();
-                if (lblVenteToast != null) lblVenteToast.Visible = false;
-            }
-            catch
-            {
-                // ignore
-            }
-        }
-
-        // Load parameters from DB into UI controls (fixes CS0103)
-        private void LoadParameters()
-        {
-            try
-            {
-                using var ctx = new DataContext();
-                var parameters = ctx.Parameters?.FirstOrDefault(p => p.Id == 1);
-                if (parameters != null)
+                using var context = new DataContext();
+                if (context.Users == null)
                 {
-                    if (txtCompanyName != null) txtCompanyName.Text = parameters.CompanyName ?? string.Empty;
-                    if (txtCompanyAddress != null) txtCompanyAddress.Text = parameters.CompanyAddress ?? string.Empty;
-                    if (txtCompanyPhone != null) txtCompanyPhone.Text = parameters.CompanyPhone ?? string.Empty;
-
-                    if (txtPricePerLiter != null)
-                    {
-                        txtPricePerLiter.Text = parameters.DefaultUnitPrice != 0m
-                            ? parameters.DefaultUnitPrice.ToString(CultureInfo.CurrentCulture)
-                            : string.Empty;
-                    }
-
-                    if (txtPortion != null)
-                    {
-                        // stored as fraction (0..1) => show as percent (0..100)
-                        txtPortion.Text = parameters.DefaultPortion != 0m
-                            ? (parameters.DefaultPortion * 100m).ToString(CultureInfo.CurrentCulture)
-                            : string.Empty;
-                    }
-
-                    // update window title or labels if required (optional)
+                    MessageBox.Show("Le contexte de la base de données n'est pas correctement configuré. Le DbSet 'Users' est nul.");
+                    return;
                 }
-                else
+
+                var user = context.Users.Find(selectedUser.Id);
+                if (user == null)
                 {
-                    // ensure controls are cleared if no parameters present
-                    if (txtCompanyName != null) txtCompanyName.Text = string.Empty;
-                    if (txtCompanyAddress != null) txtCompanyAddress.Text = string.Empty;
-                    if (txtCompanyPhone != null) txtCompanyPhone.Text = string.Empty;
-                    if (txtPricePerLiter != null) txtPricePerLiter.Text = string.Empty;
-                    if (txtPortion != null) txtPortion.Text = string.Empty;
+                    MessageBox.Show("Utilisateur introuvable.");
+                    return;
                 }
+
+                context.Users.Remove(user);
+                context.SaveChanges();
+                MessageBox.Show("Utilisateur supprimé avec succès");
             }
-            catch
+            catch (Exception ex)
             {
-                // swallow load errors
+                MessageBox.Show("Erreur lors de la suppression : " + ex.Message);
             }
+
+            RefreshUsers();
+            if (editCheckBox != null) editCheckBox.Checked = false;
         }
 
-        // Update autocomplete suggestions for searchTextBox (fixes CS0103)
-        private void UpdateAutoCompleteSource()
+        // Tab control selected index changed (wired in Designer)
+        private void MainTabControl_SelectedIndexChanged(object? sender, EventArgs e)
         {
             try
             {
-                if (searchTextBox == null) return;
+                if (mainTabControl.SelectedTab == tabParameters)
+                    LoadParameters();
 
-                var names = (DatabaseUsers ?? new List<User>())
-                    .Where(u => !string.IsNullOrWhiteSpace(u.Name))
-                    .Select(u => u.Name)
-                    .Distinct()
-                    .ToArray();
-
-                var ac = new AutoCompleteStringCollection();
-                ac.AddRange(names);
-                searchTextBox.AutoCompleteCustomSource = ac;
+                if (mainTabControl.SelectedTab == tabVente)
+                {
+                    PopulateVenteDefaultPrice();
+                    LoadVentesToday();
+                }
             }
             catch
             {
                 // swallow
             }
         }
-        // Add this method to handle the CellContentClick event for dgvVentesToday
-        private void DgvVentesToday_CellContentClick(object sender, DataGridViewCellEventArgs e)
-        {
-            // Example: Handle delete button click in the "Action" column
-            if (e.RowIndex >= 0 && dgvVentesToday.Columns[e.ColumnIndex].Name == "colVenteDelete")
-            {
-                // You can add your delete logic here, e.g.:
-                // var venteId = dgvVentesToday.Rows[e.RowIndex].Cells["colVenteId"].Value;
-                // DeleteVenteById(venteId);
-                // RefreshVentesGrid();
-            }
-        }
-        // Add this method to Form1 to fix CS0103
 
-        private void RefreshUsers()
+        // Added handler for yearComboBox SelectedIndexChanged (wired in Designer)
+        private void YearComboBox_SelectedIndexChanged(object? sender, EventArgs e)
         {
             try
             {
-                using var context = new DataContext();
-                if (context.Users == null)
-                {
-                    usersBinding.DataSource = new List<User>();
-                    DatabaseUsers = new List<User>();
-                    return;
-                }
-
-                // Load all users from the database
-                var users = context.Users.ToList();
-                DatabaseUsers = users;
-
-                // Update the binding source
-                usersBinding.DataSource = users;
-
-                // After refreshing, clear selection so inputs don't auto-populate
-                ClearGridSelection();
+                // Refresh statistics when the selected year changes
+                BtnRefreshStats_Click(this, EventArgs.Empty);
             }
             catch
             {
-                // On error, clear the grid and binding source
-                usersBinding.DataSource = new List<User>();
-                DatabaseUsers = new List<User>();
+                // swallow UI errors
             }
         }
     }

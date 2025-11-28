@@ -970,12 +970,71 @@ namespace EntityFramework
         {
             try
             {
-                // Minimal behaviour: refresh today's ventes after an (assumed) save.
+                // Parse inputs
+                if (!TryParseInt(txtVenteNbrLitres?.Text, out int? nbrLitresNullable) || nbrLitresNullable == null)
+                {
+                    MessageBox.Show("Nombre de litres invalide.");
+                    return;
+                }
+
+                if (!TryParseDecimal(txtVentePrix?.Text, out decimal prix))
+                {
+                    MessageBox.Show("Prix invalide.");
+                    return;
+                }
+
+                var vente = new Vente
+                {
+                    NbrLitres = nbrLitresNullable.Value,
+                    Prix = prix,
+                    CreatedAt = DateTime.Now
+                    // Montant will be computed by DataContext.UpdateDisplayFields before SaveChanges
+                };
+
+                // Persist
+                using (var ctx = new DataContext())
+                {
+                    if (ctx.Ventes == null)
+                    {
+                        MessageBox.Show("Le contexte de la base de données n'est pas correctement configuré. Le DbSet 'Ventes' est nul.");
+                        return;
+                    }
+
+                    ctx.Ventes.Add(vente);
+                    ctx.SaveChanges();
+                }
+
+                // Refresh UI
                 LoadVentesToday();
+
+                // Show toast (if available) for a short time
+                try
+                {
+                    if (lblVenteToast != null)
+                    {
+                        lblVenteToast.Text = "Vente enregistrée.";
+                        lblVenteToast.Visible = true;
+                        toastTimer.Enabled = true;
+                    }
+                }
+                catch { }
+
+                // Use EscPosPrinter helper to print the vente receipt (delegates to QuestPdfPrinter.GeneratePdfAndOpenVente today).
+                try
+                {
+                    // Pass null to printerName to use default behavior; adjust if you want a specific printer name.
+                    EscPosPrinter.PrintVenteReceipt(printerName: null, vente: vente);
+                    MessageBox.Show("Vente enregistrée et impression demandée.");
+                }
+                catch (Exception ex)
+                {
+                    // Keep save successful even if print fails
+                    MessageBox.Show("Vente enregistrée. Erreur lors de l'impression : " + ex.Message);
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                // swallow
+                MessageBox.Show("Erreur lors de l'enregistrement de la vente : " + ex.Message);
             }
         }
 

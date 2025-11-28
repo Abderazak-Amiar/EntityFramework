@@ -21,6 +21,13 @@ namespace EntityFramework
             if (user is null) throw new ArgumentNullException(nameof(user));
             QuestPdfPrinter.GeneratePdfAndOpen(user);
         }
+
+        // Print a Vente receipt using QuestPdfPrinter helper for ventes
+        public static void PrintVenteReceipt(string? printerName, Vente vente, int dotsPerLine = 576, bool cut = false)
+        {
+            if (vente is null) throw new ArgumentNullException(nameof(vente));
+            QuestPdfPrinter.GeneratePdfAndOpenVente(vente);
+        }
     }
 
     public static class QuestPdfPrinter
@@ -52,6 +59,144 @@ namespace EntityFramework
             catch (Exception ex)
             {
                 throw new InvalidOperationException("Failed creating PDF bytes: " + ex.Message, ex);
+            }
+        }
+
+        // New: generate & open a small PDF receipt for a Vente using same header logic as user receipts
+        public static void GeneratePdfAndOpenVente(Vente vente) 
+        {
+            if (vente is null) throw new ArgumentNullException(nameof(vente));
+
+            try
+            {
+                var fr = CultureInfo.GetCultureInfo("fr-FR");
+
+                var document = Document.Create(container =>
+                {
+                    container.Page(page =>
+                    {
+                        page.Size(new PageSize(width: 204, height: 400));
+                        page.Margin(6);
+                        page.DefaultTextStyle(x => x.FontSize(10).FontColor(Colors.Black));
+
+                        // Header: reuse logo/company layout similar to user receipt
+                        page.Header().Column(col =>
+                        {
+                            byte[]? imageBytes = null;
+                            var baseDir = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
+                            var candidates = new[]
+                            {
+                                Path.Combine(baseDir, "Images", "logoM3insra.svg"),
+                                Path.Combine(baseDir, "logoM3insra.svg")
+                            };
+
+                            foreach (var path in candidates)
+                            {
+                                try
+                                {
+                                    if (!File.Exists(path)) continue;
+                                    var raw = File.ReadAllBytes(path);
+                                    imageBytes = path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
+                                        ? RenderSvgToPng(raw, targetWidthPx: 800)
+                                        : raw;
+                                    Debug.WriteLine($"QuestPDF: using image file {path}");
+                                    break;
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.WriteLine($"QuestPDF: failed reading {path}: {ex.Message}");
+                                }
+                            }
+
+                            if (imageBytes == null)
+                            {
+                                try
+                                {
+                                    var asm = Assembly.GetExecutingAssembly();
+                                    var names = asm.GetManifestResourceNames();
+                                    var found = names.FirstOrDefault(n => n.EndsWith("logoM3insra.svg", StringComparison.OrdinalIgnoreCase));
+                                    if (found != null)
+                                    {
+                                        using var s = asm.GetManifestResourceStream(found);
+                                        if (s != null)
+                                        {
+                                            using var ms = new MemoryStream();
+                                            s.CopyTo(ms);
+                                            var raw = ms.ToArray();
+                                            imageBytes = found.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
+                                                ? RenderSvgToPng(raw, targetWidthPx: 800)
+                                                : raw;
+                                            Debug.WriteLine($"QuestPDF: using embedded resource {found}");
+                                        }
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.WriteLine($"QuestPDF: embedded resource load failed: {ex.Message}");
+                                }
+                            }
+
+                            if (imageBytes != null && imageBytes.Length > 0)
+                            {
+                                col.Item().AlignCenter().Width(70).Image(imageBytes);
+                            }
+                            else
+                            {
+                                col.Item().PaddingTop(0).Text("Logo de l'entreprise").FontSize(12).AlignCenter();
+                            }
+
+                            // Company info from Parameters (safe read)
+                            try
+                            {
+                                using var ctx = new DataContext();
+                                var parameters = ctx.Parameters?.FirstOrDefault(p => p.Id == 1);
+                                if (parameters != null)
+                                {
+                                    if (!string.IsNullOrWhiteSpace(parameters.CompanyName))
+                                        col.Item().Text(parameters.CompanyName).FontSize(11).Bold().AlignCenter();
+
+                                    if (!string.IsNullOrWhiteSpace(parameters.CompanyAddress))
+                                        col.Item().Text(parameters.CompanyAddress).FontSize(9).AlignCenter();
+
+                                    if (!string.IsNullOrWhiteSpace(parameters.CompanyPhone))
+                                        col.Item().Text(parameters.CompanyPhone).FontSize(9).AlignCenter();
+                                }
+                            }
+                            catch
+                            {
+                                // swallow
+                            }
+
+                            col.Item().PaddingTop(8).Text("Reçu de vente").FontSize(12).Bold().AlignCenter();
+                            col.Item().PaddingVertical(4).LineHorizontal(1);
+                        });
+
+                        page.Content().Column(col =>
+                        {
+                            col.Item().PaddingVertical(4).LineHorizontal(1);
+
+                            col.Item().Column(c =>
+                            {
+                                c.Item().Text($"Date : {vente.CreatedAt.ToString("g", fr)}").FontSize(9);
+                                c.Item().Text($"Litres : {vente.NbrLitres.ToString("N0", fr)}").FontSize(10);
+                                c.Item().Text($"Prix/L : {vente.Prix.ToString("N2", fr)}").FontSize(10);
+                                c.Item().PaddingTop(6).Text($"Montant : {vente.Montant.ToString("N2", fr)}").FontSize(11).Bold();
+                            });
+
+                            col.Item().PaddingTop(8).LineHorizontal(1);
+                            col.Item().PaddingTop(6).Text("Merci").AlignCenter().FontSize(9);
+                        });
+
+                        // No dotted footer line — removed as requested
+                    });
+                });
+
+                var pdfBytes = GeneratePdfBytes(document);
+                OpenPdfInDefaultViewer(pdfBytes, $"vente_{DateTime.Now:yyyyMMddHHmmss}.pdf");
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("Failed generating vente PDF: " + ex.Message, ex);
             }
         }
 
@@ -228,8 +373,7 @@ namespace EntityFramework
                             col.Item().PaddingTop(0).Text("Logo de l'entreprise").FontSize(12).AlignCenter();
                         }
 
-                        // Company info (from Parameters) — shown above the ticket title when available
-                        // We attempt to read company fields above; re-open a small safe read for company display if still needed.
+                        // Company info (from Parameters)
                         try
                         {
                             using var ctx = new DataContext();

@@ -21,6 +21,9 @@
         // Add Parameters DbSet so application settings can be persisted
         public DbSet<Parameters>? Parameters { get; set; }
 
+        // New: Ventes table
+        public DbSet<Vente>? Ventes { get; set; }
+
         // call this from SaveChanges / SaveChangesAsync to persist formatted strings
 
         private void UpdateDisplayFields()
@@ -36,6 +39,14 @@
                 u.DisplayWeight = (u.Weight.HasValue && u.Weight.Value != 0m) ? FormatDecimalSmart(u.Weight.Value, fr) : null;
                 u.DisplayUnitPrice = (u.UnitPriceLiter.HasValue && u.UnitPriceLiter.Value != 0m) ? FormatDecimalSmart(u.UnitPriceLiter.Value, fr) : null;
                 u.DisplayAmountDue = (u.AmountDue.HasValue && u.AmountDue.Value != 0m) ? FormatDecimalSmart(u.AmountDue.Value, fr) : null;
+            }
+
+            // Ensure ventes have persisted Montant computed
+            foreach (var vEntry in ChangeTracker.Entries<Vente>()
+                         .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified))
+            {
+                var v = vEntry.Entity;
+                v.Montant = v.NbrLitres * v.Prix;
             }
         }
 

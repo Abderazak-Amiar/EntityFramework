@@ -72,6 +72,18 @@
             txtPortion = new TextBox();
             btnSaveParameters = new Button();
             ParametersCheckBox = new CheckBox();
+            tabVente = new TabPage();
+            lblVenteNbrLitres = new Label();
+            txtVenteNbrLitres = new TextBox();
+            lblVentePrix = new Label();
+            txtVentePrix = new TextBox();
+            btnEnregistrerVente = new Button();
+            lblVenteMontant = new Label();
+            lblVenteMontantValue = new Label();
+            dgvVentesToday = new DataGridView();
+            chkPrintReceipt = new CheckBox();
+            lblVenteToast = new Label();
+            toastTimer = new System.Windows.Forms.Timer();
             tabStatistics = new TabPage();
             btnRefreshStats = new Button();
             dgvStats = new DataGridView();
@@ -82,8 +94,10 @@
             mainTabControl.SuspendLayout();
             tabClients.SuspendLayout();
             tabParameters.SuspendLayout();
+            tabVente.SuspendLayout();
             tabStatistics.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dgvStats).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)dgvVentesToday).BeginInit();
             SuspendLayout();
             // 
             // ItemList
@@ -360,6 +374,7 @@
             // 
             mainTabControl.Controls.Add(tabClients);
             mainTabControl.Controls.Add(tabParameters);
+            mainTabControl.Controls.Add(tabVente);
             mainTabControl.Controls.Add(tabStatistics);
             mainTabControl.Location = new Point(12, 12);
             mainTabControl.Name = "mainTabControl";
@@ -536,6 +551,139 @@
             ParametersCheckBox.UseVisualStyleBackColor = true;
             ParametersCheckBox.CheckedChanged += ParametersCheckBox_CheckedChanged;
             // 
+            // tabVente
+            // 
+            tabVente.Controls.Add(btnEnregistrerVente);
+            tabVente.Controls.Add(txtVentePrix);
+            tabVente.Controls.Add(lblVentePrix);
+            tabVente.Controls.Add(txtVenteNbrLitres);
+            tabVente.Controls.Add(lblVenteNbrLitres);
+            tabVente.Controls.Add(lblVenteMontant);
+            tabVente.Controls.Add(lblVenteMontantValue);
+            tabVente.Controls.Add(dgvVentesToday);
+            tabVente.Controls.Add(chkPrintReceipt);
+            tabVente.Controls.Add(lblVenteToast);
+            tabVente.Location = new Point(4, 24);
+            tabVente.Name = "tabVente";
+            tabVente.Padding = new Padding(3);
+            tabVente.Size = new Size(1152, 709);
+            tabVente.TabIndex = 3;
+            tabVente.Text = "Vente";
+            tabVente.UseVisualStyleBackColor = true;
+            // 
+            // lblVenteNbrLitres
+            // 
+            lblVenteNbrLitres.AutoSize = true;
+            lblVenteNbrLitres.Location = new Point(24, 28);
+            lblVenteNbrLitres.Name = "lblVenteNbrLitres";
+            lblVenteNbrLitres.Size = new Size(86, 15);
+            lblVenteNbrLitres.TabIndex = 0;
+            lblVenteNbrLitres.Text = "Nbr Litres (L) :";
+            // 
+            // txtVenteNbrLitres
+            // 
+            txtVenteNbrLitres.Location = new Point(130, 24);
+            txtVenteNbrLitres.Name = "txtVenteNbrLitres";
+            txtVenteNbrLitres.Size = new Size(120, 23);
+            txtVenteNbrLitres.TabIndex = 1;
+            txtVenteNbrLitres.TextChanged += VenteFields_TextChanged;
+            // 
+            // lblVentePrix
+            // 
+            lblVentePrix.AutoSize = true;
+            lblVentePrix.Location = new Point(24, 64);
+            lblVentePrix.Name = "lblVentePrix";
+            lblVentePrix.Size = new Size(43, 15);
+            lblVentePrix.TabIndex = 2;
+            lblVentePrix.Text = "Prix/L :";
+            // 
+            // txtVentePrix
+            // 
+            txtVentePrix.Location = new Point(130, 60);
+            txtVentePrix.Name = "txtVentePrix";
+            txtVentePrix.Size = new Size(120, 23);
+            txtVentePrix.TabIndex = 3;
+            txtVentePrix.TextChanged += VenteFields_TextChanged;
+            // 
+            // btnEnregistrerVente
+            // 
+            btnEnregistrerVente.Location = new Point(24, 100);
+            btnEnregistrerVente.Name = "btnEnregistrerVente";
+            btnEnregistrerVente.Size = new Size(100, 27);
+            btnEnregistrerVente.TabIndex = 4;
+            btnEnregistrerVente.Text = "Enregistrer";
+            btnEnregistrerVente.UseVisualStyleBackColor = true;
+            btnEnregistrerVente.Click += btnEnregistrerVente_Click;
+            // 
+            // chkPrintReceipt
+            //      
+            chkPrintReceipt.AutoSize = true;
+            chkPrintReceipt.Location = new Point(140, 104);
+            chkPrintReceipt.Name = "chkPrintReceipt";
+            chkPrintReceipt.Size = new Size(120, 19);
+            chkPrintReceipt.TabIndex = 5;
+            chkPrintReceipt.Text = "Imprimer ticket";
+            chkPrintReceipt.UseVisualStyleBackColor = true;
+            // 
+            // lblVenteMontant
+            // 
+            lblVenteMontant.AutoSize = true;
+            lblVenteMontant.Location = new Point(24, 140);
+            lblVenteMontant.Name = "lblVenteMontant";
+            lblVenteMontant.Size = new Size(50, 15);
+            lblVenteMontant.TabIndex = 6;
+            lblVenteMontant.Text = "Montant";
+            // 
+            // lblVenteMontantValue
+            // 
+            lblVenteMontantValue.AutoSize = true;
+            lblVenteMontantValue.Location = new Point(130, 140);
+            lblVenteMontantValue.Name = "lblVenteMontantValue";
+            lblVenteMontantValue.Size = new Size(0, 15);
+            lblVenteMontantValue.TabIndex = 7;
+            // 
+            // dgvVentesToday
+            // 
+            dgvVentesToday.Location = new Point(24, 180);
+            dgvVentesToday.Name = "dgvVentesToday";
+            dgvVentesToday.Size = new Size(700, 260);
+            dgvVentesToday.TabIndex = 8;
+            dgvVentesToday.AllowUserToAddRows = false;
+            dgvVentesToday.AllowUserToDeleteRows = false;
+            dgvVentesToday.ReadOnly = true;
+            dgvVentesToday.RowHeadersVisible = false;
+            dgvVentesToday.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgvVentesToday.CellContentClick += DgvVentesToday_CellContentClick;
+
+            // Add columns (Id hidden, Time, Litres, Prix, Montant, Delete)
+            var colVenteId = new DataGridViewTextBoxColumn { Name = "colVenteId", HeaderText = "Id", Visible = false };
+            var colVenteTime = new DataGridViewTextBoxColumn { Name = "colVenteTime", HeaderText = "Heure" };
+            var colVenteLitres = new DataGridViewTextBoxColumn { Name = "colVenteLitres", HeaderText = "Litres" };
+            var colVentePrix = new DataGridViewTextBoxColumn { Name = "colVentePrix", HeaderText = "Prix/L" };
+            var colVenteMontant = new DataGridViewTextBoxColumn { Name = "colVenteMontant", HeaderText = "Montant" };
+            var colVenteDelete = new DataGridViewButtonColumn { Name = "colVenteDelete", HeaderText = "Action", Text = "Supprimer", UseColumnTextForButtonValue = true };
+
+            dgvVentesToday.Columns.AddRange(new DataGridViewColumn[] { colVenteId, colVenteTime, colVenteLitres, colVentePrix, colVenteMontant, colVenteDelete });
+
+            // lblVenteToast
+            lblVenteToast.AutoSize = false;
+            lblVenteToast.Name = "lblVenteToast";
+            lblVenteToast.Size = new Size(360, 28);
+            lblVenteToast.Location = new Point(24, 460);
+            lblVenteToast.TabIndex = 20;
+            lblVenteToast.Text = "";
+            lblVenteToast.Visible = false;
+            lblVenteToast.BorderStyle = BorderStyle.FixedSingle;
+            lblVenteToast.BackColor = Color.FromArgb(255, 250, 205); // light yellow
+            lblVenteToast.ForeColor = Color.Black;
+            lblVenteToast.Padding = new Padding(6);
+            // 
+            // toastTimer
+            // 
+            toastTimer.Enabled = false;
+            toastTimer.Interval = 2000;
+            toastTimer.Tick += ToastTimer_Tick;
+            // 
             // tabStatistics
             // 
             tabStatistics.Controls.Add(yearComboBox);
@@ -611,11 +759,14 @@
             Text = "GESTION CLIENTS - HUILERIE BELABBAS ";
             Load += Form1_Load;
             ((System.ComponentModel.ISupportInitialize)ItemList).EndInit();
+            ((System.ComponentModel.ISupportInitialize)dgvVentesToday).EndInit();
             mainTabControl.ResumeLayout(false);
             tabClients.ResumeLayout(false);
             tabClients.PerformLayout();
             tabParameters.ResumeLayout(false);
             tabParameters.PerformLayout();
+            tabVente.ResumeLayout(false);
+            tabVente.PerformLayout();
             tabStatistics.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)dgvStats).EndInit();
             ResumeLayout(false);
@@ -656,6 +807,7 @@
         private TabControl mainTabControl;
         private TabPage tabClients;
         private TabPage tabParameters;
+        private TabPage tabVente;
         private TabPage tabStatistics;
 
         // Parameters tab controls (requested)
@@ -671,6 +823,29 @@
 
         // <-- New checkbox added for enabling/disabling parameter inputs -->
         private CheckBox ParametersCheckBox;
+
+        // Vente tab controls (replaced ListBox with DataGridView)
+        private Label lblVenteNbrLitres;
+        private TextBox txtVenteNbrLitres;
+        private Label lblVentePrix;
+        private TextBox txtVentePrix;
+        private Button btnEnregistrerVente;
+
+        // Montant display
+        private Label lblVenteMontant;
+        private Label lblVenteMontantValue;
+
+        // Replaced: ListBox -> DataGridView for today's ventes
+        private DataGridView dgvVentesToday;
+
+        // New hidden Id column + delete button column will be added in InitializeComponent
+
+        // Print checkbox
+        private CheckBox chkPrintReceipt;
+
+        // Toast UI
+        private Label lblVenteToast;
+        private System.Windows.Forms.Timer toastTimer;
 
         // Statistics tab controls
         private Button btnRefreshStats;

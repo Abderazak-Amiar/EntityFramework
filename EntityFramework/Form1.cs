@@ -939,6 +939,7 @@ namespace EntityFramework
                 ApplyMode();
 
                 MessageBox.Show("Paramètres sauvegardés et rechargés.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ParametersCheckBox.Checked = false;
             }
             catch (Exception ex)
             {
@@ -967,6 +968,7 @@ namespace EntityFramework
             }
         }
 
+       
         private void btnEnregistrerVente_Click(object sender, EventArgs e)
         {
             try
@@ -1021,16 +1023,24 @@ namespace EntityFramework
                 catch { }
 
                 // Use EscPosPrinter helper to print the vente receipt (delegates to QuestPdfPrinter.GeneratePdfAndOpenVente today).
-                try
+                // Only attempt printing when the "print receipt" checkbox is present and checked.
+                if (chkPrintReceipt != null && chkPrintReceipt.Checked)
                 {
-                    // Pass null to printerName to use default behavior; adjust if you want a specific printer name.
-                    EscPosPrinter.PrintVenteReceipt(printerName: null, vente: vente);
-                    MessageBox.Show("Vente enregistrée et impression demandée.");
+                    try
+                    {
+                        // Pass null to printerName to use default behavior; adjust if you want a specific printer name.
+                        EscPosPrinter.PrintVenteReceipt(printerName: null, vente: vente);
+                        MessageBox.Show("Vente enregistrée et impression demandée.");
+                    }
+                    catch (Exception ex)
+                    {
+                        // Keep save successful even if print fails
+                        MessageBox.Show("Vente enregistrée. Erreur lors de l'impression : " + ex.Message);
+                    }
                 }
-                catch (Exception ex)
+                else
                 {
-                    // Keep save successful even if print fails
-                    MessageBox.Show("Vente enregistrée. Erreur lors de l'impression : " + ex.Message);
+                    MessageBox.Show("Vente enregistrée.");
                 }
             }
             catch (Exception ex)
@@ -1038,7 +1048,6 @@ namespace EntityFramework
                 MessageBox.Show("Erreur lors de l'enregistrement de la vente : " + ex.Message);
             }
         }
-
         // Implement delete button click on today's ventes grid
         private void DgvVentesToday_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
@@ -1052,18 +1061,40 @@ namespace EntityFramework
                 var column = dgv.Columns[e.ColumnIndex];
                 if (column == null) return;
 
-                // Only handle delete button clicks
-                if (!string.Equals(column.Name, "colVenteDelete", StringComparison.InvariantCultureIgnoreCase))
-                    return;
+                // Detect a "delete" button click robustly:
+                bool isDeleteButton =
+                    column is DataGridViewButtonColumn
+                    || column.CellType == typeof(DataGridViewButtonCell)
+                    || string.Equals(column.Name, "colVenteDelete", StringComparison.InvariantCultureIgnoreCase)
+                    || string.Equals(column.HeaderText, "Supprimer", StringComparison.InvariantCultureIgnoreCase)
+                    || string.Equals(column.HeaderText, "Delete", StringComparison.InvariantCultureIgnoreCase);
+
+                if (!isDeleteButton) return;
 
                 var row = dgv.Rows[e.RowIndex];
                 if (row == null) return;
 
-                var idCell = row.Cells["colVenteId"];
-                if (idCell == null || idCell.Value == null) return;
+                // Try to find the id cell first by expected name, then fall back to scanning row values.
+                object? idObj = null;
+                if (dgv.Columns.Contains("colVenteId"))
+                {
+                    idObj = row.Cells["colVenteId"].Value;
+                }
+                else
+                {
+                    // fallback: find the first cell containing an int-like value
+                    foreach (DataGridViewCell cell in row.Cells)
+                    {
+                        if (cell?.Value == null) continue;
+                        if (int.TryParse(cell.Value.ToString(), out _))
+                        {
+                            idObj = cell.Value;
+                            break;
+                        }
+                    }
+                }
 
-                if (!int.TryParse(idCell.Value.ToString(), out int venteId))
-                    return;
+                if (idObj == null || !int.TryParse(idObj.ToString(), out int venteId)) return;
 
                 var confirm = MessageBox.Show("Supprimer cette vente ?", "Confirmer la suppression", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (confirm != DialogResult.Yes) return;
@@ -1085,7 +1116,7 @@ namespace EntityFramework
                 ctx.Ventes.Remove(vente);
                 ctx.SaveChanges();
 
-                // Refresh UI after deletion (no success MessageBox)
+                // Refresh UI after deletion
                 LoadVentesToday();
                 BtnRefreshStats_Click(this, EventArgs.Empty);
             }
@@ -1094,7 +1125,6 @@ namespace EntityFramework
                 MessageBox.Show("Erreur lors de la suppression de la vente : " + ex.Message, "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
-
         private void ToastTimer_Tick(object sender, EventArgs e)
         {
             try

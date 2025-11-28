@@ -710,32 +710,32 @@
             // 
             // colVenteId
             // 
-            colVenteId.Name = "colVenteId";
+            colVenteId.Name = "N°";
             colVenteId.ReadOnly = true;
             // 
             // colVenteTime
             // 
-            colVenteTime.Name = "colVenteTime";
+            colVenteTime.Name = "Date";
             colVenteTime.ReadOnly = true;
             // 
             // colVenteLitres
             // 
-            colVenteLitres.Name = "colVenteLitres";
+            colVenteLitres.Name = "Quantité";
             colVenteLitres.ReadOnly = true;
             // 
             // colVentePrix
             // 
-            colVentePrix.Name = "colVentePrix";
+            colVentePrix.Name = "Prix";
             colVentePrix.ReadOnly = true;
             // 
             // colVenteMontant
             // 
-            colVenteMontant.Name = "colVenteMontant";
+            colVenteMontant.Name = "Montant";
             colVenteMontant.ReadOnly = true;
             // 
             // colVenteDelete
             // 
-            colVenteDelete.Name = "colVenteDelete";
+            colVenteDelete.Name = "Delete";
             colVenteDelete.ReadOnly = true;
             // 
             // chkPrintReceipt

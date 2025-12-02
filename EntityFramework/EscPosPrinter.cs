@@ -229,6 +229,24 @@ namespace EntityFramework
             string? PayedLitersText = (user.PayedLiters.HasValue && user.PayedLiters.Value != 0) ? user.PayedLiters.Value.ToString(fr) : null;
             string? AmountDueText = (user.AmountDue.HasValue && user.AmountDue.Value != 0m) ? FormatDecimalSmart(user.AmountDue.Value, fr) : null;
 
+            // Calculate Rendement (olive oil yield per quintal) when both poids and litres available:
+            // Rendement = (Litres * 100) / Poids  -> litres per 100kg
+            string? RendementText = null;
+            try
+            {
+                if (user.Weight.HasValue && user.Weight.Value != 0m && user.NbrLiters.HasValue && user.NbrLiters.Value != 0)
+                {
+                    var litres = (decimal)user.NbrLiters.Value;
+                    var poids = user.Weight.Value;
+                    var rendement = (litres * 100m) / poids;
+                    RendementText = FormatDecimalSmart(rendement, fr);
+                }
+            }
+            catch
+            {
+                RendementText = null;
+            }
+
             // Default portion fraction read from Parameters (0..1). If missing, remains 0.
             decimal defaultPortionFraction = 0m;
             try
@@ -441,6 +459,9 @@ namespace EntityFramework
                                 AddRow("Sacs", NbrBagsText);
                                 AddRow("Bidons", NbrContainersText);
                                 AddRow("Poids", WeightText);
+
+                                // NEW: include Rendement (litres per 100kg) when calculated
+                                AddRow("Rendement", !string.IsNullOrWhiteSpace(RendementText) ? $"{RendementText} L/Q" : null);
 
                                 // Quantité(L)
                                 AddRow("Quantité(L)", NbrLitersText);

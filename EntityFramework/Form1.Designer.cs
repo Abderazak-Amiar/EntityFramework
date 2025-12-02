@@ -106,6 +106,8 @@
             colVenteMetric = new DataGridViewTextBoxColumn();
             colVenteValue = new DataGridViewTextBoxColumn();
             modeComboBox = new ComboBox();
+            // NEW: rendement textbox
+            rendementTextBox = new TextBox();
             ((System.ComponentModel.ISupportInitialize)ItemList).BeginInit();
             mainTabControl.SuspendLayout();
             tabClients.SuspendLayout();
@@ -433,6 +435,8 @@
             tabClients.Controls.Add(ItemList);
             tabClients.Controls.Add(rdoPortion);
             tabClients.Controls.Add(rdoPaiement);
+            // add rendementTextBox to tabClients
+            tabClients.Controls.Add(rendementTextBox);
             tabClients.Location = new Point(4, 24);
             tabClients.Name = "tabClients";
             tabClients.Padding = new Padding(3);
@@ -894,6 +898,14 @@
             modeComboBox.TabIndex = 30;
             modeComboBox.SelectedIndexChanged += ModeComboBox_SelectedIndexChanged;
             // 
+            // rendementTextBox
+            // 
+            rendementTextBox.Enabled = false;
+            rendementTextBox.Location = new Point(840, 490);
+            rendementTextBox.Name = "rendementTextBox";
+            rendementTextBox.Size = new Size(200, 23);
+            rendementTextBox.TabIndex = 33;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -1023,5 +1035,8 @@
         private Button btnVentePrev;
         private Button btnVenteNext;
         private Label lblVentePage;
+
+        // NEW: rendement textbox declaration
+        private TextBox rendementTextBox;
     }
 }

@@ -39,6 +39,26 @@
                 u.DisplayWeight = (u.Weight.HasValue && u.Weight.Value != 0m) ? FormatDecimalSmart(u.Weight.Value, fr) : null;
                 u.DisplayUnitPrice = (u.UnitPriceLiter.HasValue && u.UnitPriceLiter.Value != 0m) ? FormatDecimalSmart(u.UnitPriceLiter.Value, fr) : null;
                 u.DisplayAmountDue = (u.AmountDue.HasValue && u.AmountDue.Value != 0m) ? FormatDecimalSmart(u.AmountDue.Value, fr) : null;
+
+                // NEW: compute and persist rendement (litres per 100kg) if possible
+                try
+                {
+                    if (u.Weight.HasValue && u.Weight.Value != 0m && u.NbrLiters.HasValue && u.NbrLiters.Value != 0)
+                    {
+                        var litres = (decimal)u.NbrLiters.Value;
+                        var poids = u.Weight.Value;
+                        var rendement = (litres * 100m) / poids;
+                        u.DisplayRendement = FormatDecimalSmart(rendement, fr);
+                    }
+                    else
+                    {
+                        u.DisplayRendement = null;
+                    }
+                }
+                catch
+                {
+                    u.DisplayRendement = null;
+                }
             }
 
             // Ensure ventes have persisted Montant computed

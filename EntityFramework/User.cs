@@ -43,6 +43,10 @@ namespace EntityFramework
         [MaxLength(50)]
         public string? DisplayAmountDue { get; set; }
 
+        // NEW: persisted formatted rendement (litres per 100kg). Use migrations to add this column.
+        [MaxLength(50)]
+        public string? DisplayRendement { get; set; }
+
         // Convenience computed properties (not stored)
         [NotMapped]
         public string? NbrBagsFormatted => FormatDecimalSmart(NbrBags);

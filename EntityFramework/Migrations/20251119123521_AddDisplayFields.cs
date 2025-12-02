@@ -37,6 +37,13 @@ namespace EntityFramework.Migrations
                 type: "TEXT",
                 maxLength: 50,
                 nullable: true);
+
+            migrationBuilder.AddColumn<string>(
+                name: "DisplayRendement",
+                table: "Users",
+                type: "TEXT",
+                maxLength: 50,
+                nullable: true);
         }
 
         /// <inheritdoc />
@@ -56,6 +63,10 @@ namespace EntityFramework.Migrations
 
             migrationBuilder.DropColumn(
                 name: "DisplayWeight",
+                table: "Users");
+
+            migrationBuilder.DropColumn(
+                name: "DisplayRendement",
                 table: "Users");
         }
     }

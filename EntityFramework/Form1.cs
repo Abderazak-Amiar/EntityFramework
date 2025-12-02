@@ -173,7 +173,7 @@ namespace EntityFramework
                 {
                     venteYearComboBox.SelectedIndexChanged -= VenteYearComboBox_SelectedIndexChanged;
                     venteYearComboBox.Items.Clear();
-                    venteYearComboBox.Items.Add("All");
+                    venteYearComboBox.Items.Add("Tous");
 
                     using var ctx = new DataContext();
                     var venteYears = ctx.Ventes?
@@ -211,7 +211,7 @@ namespace EntityFramework
                 {
                     yearComboBox.SelectedIndexChanged -= YearComboBox_SelectedIndexChanged;
                     yearComboBox.Items.Clear();
-                    yearComboBox.Items.Add("All");
+                    yearComboBox.Items.Add("Tous");
 
                     // populate with distinct years present in DB (defensive)
                     using var ctx = new DataContext();
@@ -452,6 +452,16 @@ namespace EntityFramework
                 ReadOnly = true,
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
             });
+
+            // NEW: Rendement column (bound to DisplayRendement)
+            ItemList.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                Name = "colRendement",
+                HeaderText = "Rendement",
+                DataPropertyName = "DisplayRendement",
+                ReadOnly = true,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
+            });
         }
 
         private void ItemList_DataBindingComplete(object? sender, DataGridViewBindingCompleteEventArgs e)
@@ -467,6 +477,28 @@ namespace EntityFramework
                         // Only set numbering for non-new rows
                         if (!row.IsNewRow)
                             row.Cells["colNumber"].Value = (i + 1).ToString(CultureInfo.CurrentCulture);
+                    }
+                }
+
+                // Format Rendement cell to include label/unit when present
+                if (ItemList != null && ItemList.Columns.Contains("colRendement"))
+                {
+                    foreach (DataGridViewRow row in ItemList.Rows)
+                    {
+                        try
+                        {
+                            var cell = row.Cells["colRendement"];
+                            if (cell?.Value != null)
+                            {
+                                var val = cell.Value.ToString();
+                                if (!string.IsNullOrWhiteSpace(val))
+                                    cell.Value = $"Rendement: {val} L/Q";
+                            }
+                        }
+                        catch
+                        {
+                            // ignore per-row errors
+                        }
                     }
                 }
             }
@@ -497,7 +529,7 @@ namespace EntityFramework
                     if (venteYearComboBox != null && venteYearComboBox.SelectedItem != null)
                     {
                         var sel = venteYearComboBox.SelectedItem.ToString();
-                        if (!string.IsNullOrEmpty(sel) && !sel.Equals("All", StringComparison.InvariantCultureIgnoreCase))
+                        if (!string.IsNullOrEmpty(sel) && !sel.Equals("Tous", StringComparison.InvariantCultureIgnoreCase))
                         {
                             if (int.TryParse(sel, out int selYear))
                             {
@@ -948,51 +980,66 @@ namespace EntityFramework
 
         // Designer-referenced no-op or minimal handlers
 
-        private void label3_Click(object sender, EventArgs e)         {
+        private void label3_Click(object sender, EventArgs e)
+        {
         }
 
-        private void label9_Click(object sender, EventArgs e)         {
+        private void label9_Click(object sender, EventArgs e)
+        {
         }
 
-        private void label4_Click(object sender, EventArgs e)         {
+        private void label4_Click(object sender, EventArgs e)
+        {
         }
 
-        private void label5_Click(object sender, EventArgs e)         {
+        private void label5_Click(object sender, EventArgs e)
+        {
         }
 
-        private void label6_Click(object sender, EventArgs e)         {
+        private void label6_Click(object sender, EventArgs e)
+        {
         }
 
-        private void label7_Click(object sender, EventArgs e)         {
+        private void label7_Click(object sender, EventArgs e)
+        {
         }
 
         // Fixed signatures: provide identifier name for second parameter
 
-        private void label8_Click(object sender, EventArgs e)         {
+        private void label8_Click(object sender, EventArgs e)
+        {
         }
 
-        private void label1_Click(object sender, EventArgs e)         {
+        private void label1_Click(object sender, EventArgs e)
+        {
         }
 
-        private void label2_Click(object sender, EventArgs e)         {
+        private void label2_Click(object sender, EventArgs e)
+        {
         }
 
-        private void textBox1_TextChanged(object sender, EventArgs e)         {
+        private void textBox1_TextChanged(object sender, EventArgs e)
+        {
         }
 
-        private void textBox1_TextChanged_1(object sender, EventArgs e)         {
+        private void textBox1_TextChanged_1(object sender, EventArgs e)
+        {
         }
 
-        private void textBox2_TextChanged(object sender, EventArgs e)         {
+        private void textBox2_TextChanged(object sender, EventArgs e)
+        {
         }
 
-        private void textBox6_TextChanged(object sender, EventArgs e)         {
+        private void textBox6_TextChanged(object sender, EventArgs e)
+        {
         }
 
-        private void Poids_Click(object sender, EventArgs e)         {
+        private void Poids_Click(object sender, EventArgs e)
+        {
         }
 
-        private void weightTextBox_TextChanged(object sender, EventArgs e)         {
+        private void weightTextBox_TextChanged(object sender, EventArgs e)
+        {
         }
 
         private void clearBtn_Click(object sender, EventArgs e)
@@ -1008,13 +1055,16 @@ namespace EntityFramework
             }
         }
 
-        private void lblCompanyAddressPhone_Click(object sender, EventArgs e)         {
+        private void lblCompanyAddressPhone_Click(object sender, EventArgs e)
+        {
         }
 
-        private void txtCompanyAddressPhone_TextChanged(object sender, EventArgs e)         {
+        private void txtCompanyAddressPhone_TextChanged(object sender, EventArgs e)
+        {
         }
 
-        private void lblPortion_Click(object sender, EventArgs e)         {
+        private void lblPortion_Click(object sender, EventArgs e)
+        {
         }
 
         private void BtnSaveParameters_Click(object sender, EventArgs e)
@@ -1135,7 +1185,7 @@ namespace EntityFramework
                 venteCurrentPage = 1;
                 LoadVentesToday();
 
-             
+
 
                 // Use EscPosPrinter helper to print the vente receipt (delegates to QuestPdfPrinter.GeneratePdfAndOpenVente today).
                 // Only attempt printing when the "print receipt" checkbox is present and checked.
@@ -1400,6 +1450,40 @@ namespace EntityFramework
                     ? FormatDecimalSmart(selectedUser.Weight.Value)
                     : string.Empty;
 
+                // NEW: set rendement display control if present (defensive)
+                try
+                {
+                    string? dispRend = null;
+                    if (!string.IsNullOrWhiteSpace(selectedUser.DisplayRendement))
+                    {
+                        dispRend = $"Rendement: {selectedUser.DisplayRendement} L/Q";
+                    }
+                    else if (selectedUser.Weight.HasValue && selectedUser.Weight.Value != 0m && selectedUser.NbrLiters.HasValue && selectedUser.NbrLiters.Value != 0)
+                    {
+                        // compute fallback when persisted display not available
+                        var litres = (decimal)selectedUser.NbrLiters.Value;
+                        var poids = selectedUser.Weight.Value;
+                        var rendement = (litres * 100m) / poids;
+                        dispRend = $"{FormatDecimalSmart(rendement)} L/Q";
+                        // optional: prefix with label if you want same style
+                        dispRend = $"Rendement: {dispRend}";
+                    }
+
+                    if (dispRend != null)
+                    {
+                        // defensive: if a TextBox named rendementTextBox exists in the designer, fill it
+                        try { if (rendementTextBox != null) rendementTextBox.Text = dispRend; } catch { }
+                    }
+                    else
+                    {
+                        try { if (rendementTextBox != null) rendementTextBox.Text = string.Empty; } catch { }
+                    }
+                }
+                catch
+                {
+                    // ignore
+                }
+
                 // Restore persisted Portion / Paiement mode for this user
                 try
                 {
@@ -1431,109 +1515,6 @@ namespace EntityFramework
             }
         }
 
-        // Print button click (now uses QuestPDF only)
-
-        private void printBtn_Click(object sender, EventArgs e)
-        {
-            if (ItemList.CurrentRow == null)
-            {
-                MessageBox.Show("Sélectionnez un utilisateur à imprimer.");
-                return;
-            }
-
-            var selectedUser = ItemList.CurrentRow.DataBoundItem as User;
-            if (selectedUser == null)
-            {
-                MessageBox.Show("La ligne sélectionnée n'est pas un utilisateur.");
-                return;
-            }
-
-            try
-            {
-                // Create PDF bytes with existing QuestPdfPrinter helper
-                var pdfBytes = QuestPdfPrinter.CreatePdfBytes(selectedUser);
-
-                // Try to print silently (uses SumatraPDF if installed). If printing fails,
-                // fall back to opening the PDF so the user can print manually.
-                if (TryPrintPdfSilently(pdfBytes, printerName: null))
-                {
-                    MessageBox.Show("Tâche d'impression envoyée.");
-                }
-                else
-                {
-                    // fallback to the existing preview/open behaviour
-                    QuestPdfPrinter.GeneratePdfAndOpen(selectedUser);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Échec de l'impression : " + ex.Message);
-            }
-        }
-
-        // Helper: try to print PDF bytes without showing a preview.
-        // Returns true when a print process was started, false when not.
-
-        private bool TryPrintPdfSilently(byte[] pdfBytes, string? printerName)
-        {
-            if (pdfBytes == null || pdfBytes.Length == 0) return false;
-            var tmp = Path.Combine(Path.GetTempPath(), $"user_ticket_{Guid.NewGuid():N}.pdf");
-            File.WriteAllBytes(tmp, pdfBytes);
-
-            try
-            {
-                // 1) Prefer SumatraPDF (supports silent printing). Check common install locations.
-                string? sumatra = GetSumatraPath();
-                if (!string.IsNullOrEmpty(sumatra) && File.Exists(sumatra))
-                {
-                    // -print-to-default or -print-to "Printer Name" (if printerName supplied)
-                    var args = string.IsNullOrEmpty(printerName)
-                        ? $"-print-to-default -silent \"{tmp}\""
-                        : $"-print-to \"{printerName}\" -silent \"{tmp}\"";
-
-                    var psi = new ProcessStartInfo(sumatra, args)
-                    {
-                        CreateNoWindow = true,
-                        UseShellExecute = false
-                    };
-                    Process.Start(psi);
-                    return true;
-                }
-
-                // 2) Fallback: ask the OS to print using the associated application.
-                // Note: this may show UI depending on the associated application.
-                var psiShell = new ProcessStartInfo(tmp)
-                {
-                    Verb = "Print",
-                    CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden,
-                    UseShellExecute = true
-                };
-
-                Process.Start(psiShell);
-                return true;
-            }
-            catch
-            {
-                // if printing failed, let caller fall back to preview/open
-                return false;
-            }
-        }
-
-        // Try a few typical SumatraPDF locations
-
-        private static string? GetSumatraPath()
-        {
-            var candidates = new[]
-            {
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "SumatraPDF", "SumatraPDF.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "SumatraPDF", "SumatraPDF.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SumatraPDF", "SumatraPDF.exe")
-                };
-
-            return candidates.FirstOrDefault(File.Exists);
-        }
-
         // Utility: clear form fields
 
         private void ClearFormFields()
@@ -1559,6 +1540,9 @@ namespace EntityFramework
 
                 if (txtVenteNbrLitres != null) txtVenteNbrLitres.Text = string.Empty;
                 if (txtVentePrix != null) txtVentePrix.Text = string.Empty;
+
+                // NEW: clear rendement control if present
+                try { if (rendementTextBox != null) rendementTextBox.Text = string.Empty; } catch { }
             }
             catch
             {
@@ -1613,7 +1597,7 @@ namespace EntityFramework
                     if (yearComboBox != null && yearComboBox.SelectedItem != null)
                     {
                         var sel = yearComboBox.SelectedItem.ToString();
-                        if (!string.IsNullOrEmpty(sel) && !sel.Equals("All", StringComparison.CurrentCultureIgnoreCase))
+                        if (!string.IsNullOrEmpty(sel) && !sel.Equals("Tous", StringComparison.CurrentCultureIgnoreCase))
                         {
                             if (int.TryParse(sel, out int selYear))
                             {
@@ -1971,5 +1955,105 @@ namespace EntityFramework
                 // swallow UI errors
             }
         }
+        // Designer-wired print button handler (was missing)
+
+
+        private void printBtn_Click(object sender, EventArgs e)
+        {
+            if (ItemList.CurrentRow == null)
+            {
+                MessageBox.Show("Sélectionnez un utilisateur à imprimer.");
+                return;
+            }
+
+            var selectedUser = ItemList.CurrentRow.DataBoundItem as User;
+            if (selectedUser == null)
+            {
+                MessageBox.Show("La ligne sélectionnée n'est pas un utilisateur.");
+                return;
+            }
+
+            try
+            {
+                // Create PDF bytes with existing QuestPdfPrinter helper
+                var pdfBytes = QuestPdfPrinter.CreatePdfBytes(selectedUser);
+
+                // Try to print silently (uses SumatraPDF if installed). If printing fails,
+                // fall back to opening the PDF so the user can print manually.
+                if (TryPrintPdfSilently(pdfBytes, printerName: null))
+                {
+                    MessageBox.Show("Tâche d'impression envoyée.");
+                }
+                else
+                {
+                    // fallback to the existing preview/open behaviour
+                    QuestPdfPrinter.GeneratePdfAndOpen(selectedUser);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Échec de l'impression : " + ex.Message);
+            }
+        }
+
+        private bool TryPrintPdfSilently(byte[] pdfBytes, string? printerName)
+        {
+            if (pdfBytes == null || pdfBytes.Length == 0) return false;
+            var tmp = Path.Combine(Path.GetTempPath(), $"user_ticket_{Guid.NewGuid():N}.pdf");
+            File.WriteAllBytes(tmp, pdfBytes);
+
+            try
+            {
+                // 1) Prefer SumatraPDF (supports silent printing). Check common install locations.
+                string? sumatra = GetSumatraPath();
+                if (!string.IsNullOrEmpty(sumatra) && File.Exists(sumatra))
+                {
+                    // -print-to-default or -print-to "Printer Name" (if printerName supplied)
+                    var args = string.IsNullOrEmpty(printerName)
+                        ? $"-print-to-default -silent \"{tmp}\""
+                        : $"-print-to \"{printerName}\" -silent \"{tmp}\"";
+
+                    var psi = new ProcessStartInfo(sumatra, args)
+                    {
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    };
+                    Process.Start(psi);
+                    return true;
+                }
+
+                // 2) Fallback: ask the OS to print using the associated application.
+                // Note: this may show UI depending on the associated application.
+                var psiShell = new ProcessStartInfo(tmp)
+                {
+                    Verb = "Print",
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    UseShellExecute = true
+                };
+
+                Process.Start(psiShell);
+                return true;
+            }
+            catch
+            {
+                // if printing failed, let caller fall back to preview/open
+                return false;
+            }
+        }
+
+        private static string? GetSumatraPath()
+        {
+            var candidates = new[]
+            {
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "SumatraPDF", "SumatraPDF.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "SumatraPDF", "SumatraPDF.exe"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SumatraPDF", "SumatraPDF.exe")
+                };
+
+            return candidates.FirstOrDefault(File.Exists);
+        }
+
     }
 }
+

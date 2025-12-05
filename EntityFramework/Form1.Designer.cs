@@ -59,10 +59,12 @@
             clearBtn = new Button();
             mainTabControl = new TabControl();
             tabClients = new TabPage();
+            label12 = new Label();
             label11 = new Label();
             label7 = new Label();
             rdoPortion = new RadioButton();
             rdoPaiement = new RadioButton();
+            rendementTextBox = new TextBox();
             tabParameters = new TabPage();
             txtCompanyPhone = new TextBox();
             label10 = new Label();
@@ -106,8 +108,6 @@
             colVenteMetric = new DataGridViewTextBoxColumn();
             colVenteValue = new DataGridViewTextBoxColumn();
             modeComboBox = new ComboBox();
-            // NEW: rendement textbox
-            rendementTextBox = new TextBox();
             ((System.ComponentModel.ISupportInitialize)ItemList).BeginInit();
             mainTabControl.SuspendLayout();
             tabClients.SuspendLayout();
@@ -404,6 +404,7 @@
             // 
             // tabClients
             // 
+            tabClients.Controls.Add(label12);
             tabClients.Controls.Add(label11);
             tabClients.Controls.Add(clearBtn);
             tabClients.Controls.Add(searchTextBox);
@@ -435,7 +436,6 @@
             tabClients.Controls.Add(ItemList);
             tabClients.Controls.Add(rdoPortion);
             tabClients.Controls.Add(rdoPaiement);
-            // add rendementTextBox to tabClients
             tabClients.Controls.Add(rendementTextBox);
             tabClients.Location = new Point(4, 24);
             tabClients.Name = "tabClients";
@@ -444,6 +444,16 @@
             tabClients.TabIndex = 0;
             tabClients.Text = "Clients";
             tabClients.UseVisualStyleBackColor = true;
+            // 
+            // label12
+            // 
+            label12.AutoSize = true;
+            label12.Location = new Point(29, 524);
+            label12.Name = "label12";
+            label12.Size = new Size(68, 15);
+            label12.TabIndex = 34;
+            label12.Text = "Rendement";
+            label12.Click += label12_Click;
             // 
             // label11
             // 
@@ -487,6 +497,14 @@
             rdoPaiement.Text = "Paiement";
             rdoPaiement.UseVisualStyleBackColor = true;
             rdoPaiement.CheckedChanged += rdoMode_CheckedChanged;
+            // 
+            // rendementTextBox
+            // 
+            rendementTextBox.Enabled = false;
+            rendementTextBox.Location = new Point(99, 520);
+            rendementTextBox.Name = "rendementTextBox";
+            rendementTextBox.Size = new Size(151, 23);
+            rendementTextBox.TabIndex = 33;
             // 
             // tabParameters
             // 
@@ -756,33 +774,39 @@
             // 
             // colVenteId
             // 
-            colVenteId.Name = "N°";
+            colVenteId.Name = "colVenteId";
             colVenteId.ReadOnly = true;
+            colVenteId.HeaderText = "ID";
             // 
             // colVenteTime
             // 
-            colVenteTime.Name = "Date";
+            colVenteTime.Name = "colVenteTime";
             colVenteTime.ReadOnly = true;
+            colVenteTime.HeaderText = "Date";
             // 
             // colVenteLitres
             // 
-            colVenteLitres.Name = "Litres";
+            colVenteLitres.Name = "colVenteLitres";
             colVenteLitres.ReadOnly = true;
+            colVenteLitres.HeaderText = "Litres";
             // 
             // colVentePrix
             // 
-            colVentePrix.Name = "Prix";
+            colVentePrix.Name = "colVentePrix";
             colVentePrix.ReadOnly = true;
+            colVentePrix.HeaderText = "Prix";
             // 
             // colVenteMontant
             // 
-            colVenteMontant.Name = "Montant";
+            colVenteMontant.Name = "colVenteMontant";
             colVenteMontant.ReadOnly = true;
+            colVenteMontant.HeaderText = "Montant";
             // 
             // colVenteDelete
             // 
-            colVenteDelete.Name = "Supprimer";
+            colVenteDelete.Name = "colVenteDelete";
             colVenteDelete.ReadOnly = true;
+            colVenteDelete.HeaderText = "Supprimer";
             // 
             // chkPrintReceipt
             // 
@@ -898,14 +922,6 @@
             modeComboBox.TabIndex = 30;
             modeComboBox.SelectedIndexChanged += ModeComboBox_SelectedIndexChanged;
             // 
-            // rendementTextBox
-            // 
-            rendementTextBox.Enabled = false;
-            rendementTextBox.Location = new Point(840, 490);
-            rendementTextBox.Name = "rendementTextBox";
-            rendementTextBox.Size = new Size(200, 23);
-            rendementTextBox.TabIndex = 33;
-            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
@@ -913,7 +929,7 @@
             ClientSize = new Size(1184, 761);
             Controls.Add(mainTabControl);
             Name = "Form1";
-            Text = "GESTION CLIENTS - HUILERIE BELABBAS ";
+            Text = "GESTION CLIENTS";
             Load += Form1_Load;
             ((System.ComponentModel.ISupportInitialize)ItemList).EndInit();
             mainTabControl.ResumeLayout(false);
@@ -1038,5 +1054,6 @@
 
         // NEW: rendement textbox declaration
         private TextBox rendementTextBox;
+        private Label label12;
     }
 }

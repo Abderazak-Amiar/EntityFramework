@@ -5,6 +5,7 @@ namespace EntityFramework
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Drawing;
+
     using System.Globalization;
     using System.IO;
     using System.Linq;
@@ -57,6 +58,10 @@ namespace EntityFramework
             ItemList.DataBindingComplete -= ItemList_DataBindingComplete;
             ItemList.DataBindingComplete += ItemList_DataBindingComplete;
 
+            // Ensure cell formatting for rendement to avoid mutating cell values during binding
+            ItemList.CellFormatting -= ItemList_CellFormatting;
+            ItemList.CellFormatting += ItemList_CellFormatting;
+
             // Do not auto-select the first item on startup
             ClearGridSelection();
 
@@ -106,6 +111,18 @@ namespace EntityFramework
 
             // Populate parameters inputs from DB and vente defaults
             LoadParameters();
+            // Update the window title using the CompanyName from Parameters
+            UpdateWindowTitleFromParameters();
+            // Attach live-update handler so title follows textbox changes
+            try
+            {
+                if (txtCompanyName != null)
+                {
+                    txtCompanyName.TextChanged -= TxtCompanyName_TextChanged;
+                    txtCompanyName.TextChanged += TxtCompanyName_TextChanged;
+                }
+            }
+            catch { }
             PopulateVenteDefaultPrice();
 
             // Wire live recalculation for unit price / paid liters (if designer textboxes exist)
@@ -420,6 +437,17 @@ namespace EntityFramework
             if (ItemList == null) return;
 
             ItemList.AutoGenerateColumns = false;
+            // Make header text bold for ItemList
+            try
+            {
+                var headerFont = new Font(ItemList.Font, FontStyle.Bold);
+                ItemList.ColumnHeadersDefaultCellStyle.Font = headerFont;
+            }
+            catch
+            {
+                // ignore font errors
+            }
+
             // Keep existing columns (designer already added the N° column). Clear other runtime columns to avoid duplicates.
             var numberCol = ItemList.Columns.Cast<DataGridViewColumn>().FirstOrDefault(c => c.Name == "colNumber");
             ItemList.Columns.Clear();
@@ -453,15 +481,7 @@ namespace EntityFramework
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
             });
 
-            // NEW: Rendement column (bound to DisplayRendement)
-            ItemList.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                Name = "colRendement",
-                HeaderText = "Rendement",
-                DataPropertyName = "DisplayRendement",
-                ReadOnly = true,
-                AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells
-            });
+            // Removed Rendement column per request: do not add 'colRendement' to the grid
         }
 
         private void ItemList_DataBindingComplete(object? sender, DataGridViewBindingCompleteEventArgs e)
@@ -471,36 +491,17 @@ namespace EntityFramework
             {
                 if (ItemList != null && ItemList.Columns.Contains("colNumber"))
                 {
-                    for (int i = 0; i < ItemList.Rows.Count; i++)
+                    for (int i =0; i < ItemList.Rows.Count; i++)
                     {
                         var row = ItemList.Rows[i];
                         // Only set numbering for non-new rows
                         if (!row.IsNewRow)
-                            row.Cells["colNumber"].Value = (i + 1).ToString(CultureInfo.CurrentCulture);
+                            row.Cells["colNumber"].Value = (i +1).ToString(CultureInfo.CurrentCulture);
                     }
                 }
 
-                // Format Rendement cell to include label/unit when present
-                if (ItemList != null && ItemList.Columns.Contains("colRendement"))
-                {
-                    foreach (DataGridViewRow row in ItemList.Rows)
-                    {
-                        try
-                        {
-                            var cell = row.Cells["colRendement"];
-                            if (cell?.Value != null)
-                            {
-                                var val = cell.Value.ToString();
-                                if (!string.IsNullOrWhiteSpace(val))
-                                    cell.Value = $"Rendement: {val} L/Q";
-                            }
-                        }
-                        catch
-                        {
-                            // ignore per-row errors
-                        }
-                    }
-                }
+                // Do NOT mutate cell.Value here. CellFormatting will handle presentation without
+                // changing the underlying bound data, which avoids re-entrant binding events.
             }
             catch
             {
@@ -509,6 +510,48 @@ namespace EntityFramework
 
             // Optionally, clear selection after data binding to avoid auto-selecting the first row
             ClearGridSelection();
+        }
+
+        // Use CellFormatting to present the Rendement column without mutating the underlying value
+        private void ItemList_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+        {
+            try
+            {
+                if (ItemList == null) return;
+                if (e.ColumnIndex <0 || e.ColumnIndex >= ItemList.Columns.Count) return;
+
+                var col = ItemList.Columns[e.ColumnIndex];
+                if (!string.Equals(col.Name, "colRendement", StringComparison.InvariantCultureIgnoreCase))
+                    return;
+
+                var raw = e.Value?.ToString();
+                if (string.IsNullOrWhiteSpace(raw))
+                {
+                    e.Value = string.Empty;
+                    e.FormattingApplied = true;
+                    return;
+                }
+
+                // Avoid double-prefixing if underlying value already includes the label
+                if (raw.StartsWith("Rendement:", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    // Ensure unit text exists
+                    if (!raw.EndsWith("L/Q", StringComparison.InvariantCultureIgnoreCase))
+                        e.Value = raw + " L/Q";
+                    else
+                        e.Value = raw;
+                }
+                else
+                {
+                    e.Value = $"{raw}";
+                }
+
+                e.FormattingApplied = true;
+            }
+            catch
+            {
+                // swallow per-row formatting errors
+            }
         }
 
         // Load today's ventes into the DataGridView (now supports year filter and pagination)
@@ -1113,6 +1156,18 @@ namespace EntityFramework
                 PopulateDefaultUnitPrice();
                 ApplyMode();
 
+                // Update title now that company name may have changed
+                UpdateWindowTitleFromParameters();
+                try
+                {
+                    if (txtCompanyName != null)
+                    {
+                        txtCompanyName.TextChanged -= TxtCompanyName_TextChanged;
+                        txtCompanyName.TextChanged += TxtCompanyName_TextChanged;
+                    }
+                }
+                catch { }
+
                 MessageBox.Show("Paramètres sauvegardés et rechargés.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 ParametersCheckBox.Checked = false;
             }
@@ -1456,17 +1511,17 @@ namespace EntityFramework
                     string? dispRend = null;
                     if (!string.IsNullOrWhiteSpace(selectedUser.DisplayRendement))
                     {
-                        dispRend = $"Rendement: {selectedUser.DisplayRendement} L/Q";
+                        // Show only the value + unit in the input textbox (no "Rendement:" label)
+                        dispRend = $"{selectedUser.DisplayRendement} L/Q";
                     }
-                    else if (selectedUser.Weight.HasValue && selectedUser.Weight.Value != 0m && selectedUser.NbrLiters.HasValue && selectedUser.NbrLiters.Value != 0)
+                    else if (selectedUser.Weight.HasValue && selectedUser.Weight.Value !=0m && selectedUser.NbrLiters.HasValue && selectedUser.NbrLiters.Value !=0)
                     {
                         // compute fallback when persisted display not available
                         var litres = (decimal)selectedUser.NbrLiters.Value;
                         var poids = selectedUser.Weight.Value;
-                        var rendement = (litres * 100m) / poids;
+                        var rendement = (litres *100m) / poids;
+                        // Only show the formatted value plus unit
                         dispRend = $"{FormatDecimalSmart(rendement)} L/Q";
-                        // optional: prefix with label if you want same style
-                        dispRend = $"Rendement: {dispRend}";
                     }
 
                     if (dispRend != null)
@@ -1679,6 +1734,10 @@ namespace EntityFramework
                     dgvStats.Rows.Add("Total Nombre de litre Portion Entrées", totalPortionEntrees.ToString("N1", ci));
                     dgvStats.Rows.Add("Total Nombre de litre livrées", totalNombreLitresLivrees.ToString("N1", ci));
                     dgvStats.Rows.Add("Recette (litres vendues)", totalRevenueFromPaidLiters.ToString("N2", ci));
+
+                    // NEW: Total huile vendu shown under main stats = Recette (litres vendues) + Ventes - Recette (journalisée)
+                    var totalHuileVendueMonetary = totalRevenueFromPaidLiters + totalVentesRecette;
+                    dgvStats.Rows.Add("Total huile vendu", totalHuileVendueMonetary.ToString("N2", ci));
                 }
 
                 if (dgvVenteStats != null)
@@ -1687,6 +1746,8 @@ namespace EntityFramework
                     dgvVenteStats.Rows.Add("Total ventes (enregistrements)", ventes.Count.ToString("N0", ci));
                     dgvVenteStats.Rows.Add("Ventes - Litres (journalisées)", totalVentesLitres.ToString("N0", ci));
                     dgvVenteStats.Rows.Add("Ventes - Recette (journalisée)", totalVentesRecette.ToString("N2", ci));
+
+                    // Note: 'Total huile vendu' is displayed in the main stats grid (dgvStats).
                 }
 
                 // Refresh today's ventes view
@@ -2054,6 +2115,48 @@ namespace EntityFramework
             return candidates.FirstOrDefault(File.Exists);
         }
 
+        // Update the Form's Text using the CompanyName stored in Parameters (Id =1)
+        private void UpdateWindowTitleFromParameters()
+        {
+            try
+            {
+                using var ctx = new DataContext();
+                var parameters = ctx.Parameters?.FirstOrDefault(p => p.Id == 1);
+                if (parameters != null && !string.IsNullOrWhiteSpace(parameters.CompanyName))
+                {
+                    this.Text = $"GESTION CLIENTS - {parameters.CompanyName}";
+                }
+                else
+                {
+                    this.Text = "GESTION CLIENTS";
+                }
+            }
+            catch
+            {
+                // fallback to default title on error
+                try { this.Text = "GESTION CLIENTS"; } catch { }
+            }
+        }
+
+        // Live-update window title while editing company name in the Parameters tab
+        private void TxtCompanyName_TextChanged(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (txtCompanyName == null) return;
+                var name = txtCompanyName.Text?.Trim() ?? string.Empty;
+                this.Text = string.IsNullOrEmpty(name) ? "GESTION CLIENTS" : $"GESTION CLIENTS - {name}";
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
+        private void label12_Click(object sender, EventArgs e)
+        {
+
+        }
     }
 }
 

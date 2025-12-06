@@ -16,11 +16,11 @@ namespace EntityFramework
         [STAThread]
         internal static void Main()
         {
-            Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
-            .WriteTo.File("logs/log.txt", rollingInterval: RollingInterval.Day)
-            .CreateLogger();
-            Log.Information("==>Program started");
+            //Log.Logger = new LoggerConfiguration()
+            //.MinimumLevel.Debug()
+            //.WriteTo.File("logs/log.txt", rollingInterval: RollingInterval.Day)
+            //.CreateLogger();
+            //Log.Information("==>Program started");
             // Configure QuestPDF license if needed
             QuestPDF.Settings.License = LicenseType.Community;
 
@@ -87,7 +87,7 @@ namespace EntityFramework
 
                 // Always compare DB license key with machine license
                 var machineSerial = GetMotherboardSerial()?.Trim();
-                Log.Information($"==>Machine Serial: {machineSerial}");
+                //Log.Information($"==>Machine Serial: {machineSerial}");
 
                 if (string.IsNullOrEmpty(machineSerial))
                 {
@@ -111,7 +111,7 @@ namespace EntityFramework
                         }
 
                         var entered = form.LicenseKey?.Trim();
-                        Log.Information($"==>Entered License: {entered}");
+                        //Log.Information($"==>Entered License: {entered}");
                         if (!string.IsNullOrEmpty(entered) &&
                             string.Equals(entered, machineSerial, StringComparison.OrdinalIgnoreCase))
                         {

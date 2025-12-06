@@ -5,7 +5,6 @@ namespace EntityFramework
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Drawing;
-
     using System.Globalization;
     using System.IO;
     using System.Linq;
@@ -22,6 +21,9 @@ namespace EntityFramework
         // Prevent re-entrancy when applying portion
 
         private bool suppressPortionApply;
+
+        // Prevent NoComma_TextChanged from sanitizing programmatic text assignments
+        private bool suppressNoCommaTextChanged;
 
         public List<User> DatabaseUsers { get; private set; } = new List<User>();
 
@@ -166,6 +168,35 @@ namespace EntityFramework
                 // Swallow UI wiring errors
             }
 
+            // Enforce dot as decimal separator in all numeric text inputs: replace any comma with a dot on-the-fly
+            try
+            {
+                var numericTextBoxes = new TextBox?[]
+                {
+                    textBox2, // nbr bags (decimal)
+                    textBox4, // nbr liters (int)
+                    textBox5, // unit price
+                    textBox6, // payed liters (decimal)
+                    textBox7, // amount due (decimal)
+                    weightTextBox,
+                    txtPricePerLiter,
+                    txtPortion,
+                    txtVenteNbrLitres,
+                    txtVentePrix
+                };
+
+                foreach (var tb in numericTextBoxes)
+                {
+                    if (tb == null) continue;
+                    tb.TextChanged -= NoComma_TextChanged;
+                    tb.TextChanged += NoComma_TextChanged;
+                }
+            }
+            catch
+            {
+                // ignore wiring errors
+            }
+
             try
             {
                 ConfigureStatsGrid();
@@ -294,6 +325,21 @@ namespace EntityFramework
             return decimal.Truncate(value) == value
                 ? value.ToString("N0", CultureInfo.CurrentCulture)
                 : value.ToString("N1", CultureInfo.CurrentCulture);
+        }
+
+        // Helper to set TextBox.Text programmatically without triggering NoComma_TextChanged sanitization.
+        private void SetTextPreservingFormatting(TextBox? tb, string text)
+        {
+            if (tb == null) return;
+            try
+            {
+                suppressNoCommaTextChanged = true;
+                tb.Text = text ?? string.Empty;
+            }
+            finally
+            {
+                suppressNoCommaTextChanged = false;
+            }
         }
 
         // Refresh the UI list of users from the database and bind to the BindingSource.
@@ -762,7 +808,19 @@ namespace EntityFramework
 
                     try
                     {
-                        if (rdoPortion != null) rdoPortion.Checked = true;
+                        // Instead of forcing Portion for every edit operation, preserve the current
+                        // user's persisted mode if a user is selected. If no user is selected, default to Portion.
+                        if (ItemList != null && ItemList.CurrentRow != null && ItemList.CurrentRow.DataBoundItem is User selectedUser)
+                        {
+                            bool isPortion = selectedUser.IsPortionMode ?? true;
+                            if (rdoPortion != null) rdoPortion.Checked = isPortion;
+                            if (rdoPaiement != null) rdoPaiement.Checked = !isPortion;
+                        }
+                        else
+                        {
+                            if (rdoPortion != null) rdoPortion.Checked = true;
+                        }
+
                         // Ensure UI reflects the selected mode (clears payment fields, etc.)
                         ApplyMode();
                     }
@@ -820,7 +878,7 @@ namespace EntityFramework
                     // Clear and disable payment fields
                     textBox5.Text = string.Empty;
                     textBox6.Text = string.Empty;
-                    textBox7.Text = string.Empty;
+                    SetTextPreservingFormatting(textBox7, string.Empty);
 
                     textBox5.Enabled = false;
                     textBox6.Enabled = false;
@@ -958,7 +1016,7 @@ namespace EntityFramework
             }
             catch
             {
-                // swallow UI errors
+                // swallow
             }
         }
 
@@ -997,23 +1055,26 @@ namespace EntityFramework
             {
                 if (textBox5 == null || textBox6 == null || textBox7 == null) return;
 
+                // Parse unit price as decimal (culture-aware)
                 if (!TryParseDecimal(textBox5.Text, out decimal unitPrice))
                 {
-                    // if unit price unparsable, clear amount (avoid misleading 0)
-                    textBox7.Text = string.Empty;
+                    // if unit price unparsable, clear amount (avoid misleading0)
+                    SetTextPreservingFormatting(textBox7, string.Empty);
                     return;
                 }
 
-                // allow decimal liters
+                // allow decimal liters (textBox6 may contain fractional liters)
                 if (!TryParseDecimal(textBox6.Text, out decimal payedLitersDecimal))
                 {
-                    textBox7.Text = string.Empty;
+                    SetTextPreservingFormatting(textBox7, string.Empty);
                     return;
                 }
 
+                // Compute amount as payed liters * unit price
                 var amount = payedLitersDecimal * unitPrice;
 
-                textBox7.Text = amount != 0m ? FormatDecimalSmart(amount) : string.Empty;
+                // Show monetary value with two decimals using current culture
+                SetTextPreservingFormatting(textBox7, amount !=0m ? amount.ToString("N2", CultureInfo.CurrentCulture) : string.Empty);
             }
             catch
             {
@@ -1021,6 +1082,7 @@ namespace EntityFramework
             }
         }
 
+        // ---------------------------
         // Designer-referenced no-op or minimal handlers
 
         private void label3_Click(object sender, EventArgs e)
@@ -1489,16 +1551,16 @@ namespace EntityFramework
 
                 if (selectedUser.AmountDue.HasValue && selectedUser.AmountDue.Value != 0m)
                 {
-                    textBox7.Text = FormatDecimalSmart(selectedUser.AmountDue.Value);
+                    SetTextPreservingFormatting(textBox7, FormatDecimalSmart(selectedUser.AmountDue.Value));
                 }
                 else if (haveUnitPrice && (selectedUser.PayedLiters ?? 0) != 0)
                 {
                     var amount = (selectedUser.PayedLiters ?? 0) * effectiveUnitPrice;
-                    textBox7.Text = amount != 0m ? FormatDecimalSmart(amount) : string.Empty;
+                    SetTextPreservingFormatting(textBox7, amount != 0m ? FormatDecimalSmart(amount) : string.Empty);
                 }
                 else
                 {
-                    textBox7.Text = string.Empty;
+                    SetTextPreservingFormatting(textBox7, string.Empty);
                 }
 
                 weightTextBox.Text = selectedUser.Weight.HasValue && selectedUser.Weight.Value != 0m
@@ -1584,7 +1646,7 @@ namespace EntityFramework
                 if (textBox4 != null) textBox4.Text = string.Empty;
                 if (textBox5 != null) textBox5.Text = string.Empty;
                 if (textBox6 != null) textBox6.Text = string.Empty;
-                if (textBox7 != null) textBox7.Text = string.Empty;
+                if (textBox7 != null) SetTextPreservingFormatting(textBox7, string.Empty);
                 if (weightTextBox != null) weightTextBox.Text = string.Empty;
 
                 if (txtCompanyName != null) txtCompanyName.Text = string.Empty;
@@ -1783,7 +1845,7 @@ namespace EntityFramework
                 }
 
                 if (!TryParseDecimal(textBox2.Text, out decimal nbrBags))
-                    nbrBags = 0m;
+                    nbrBags =0m;
 
                 var nbrContainers = textBox3.Text.Trim();
 
@@ -1791,19 +1853,30 @@ namespace EntityFramework
                     nbrLitersNullable = null;
 
                 if (!TryParseDecimal(textBox5.Text, out decimal unitPrice))
-                    unitPrice = 0m;
+                    unitPrice =0m;
 
-                if (!TryParseInt(textBox6.Text, out int? payedLitersNullable))
-                    payedLitersNullable = null;
+                // Parse payed liters as decimal for amount calculation (allow fractional liters)
+                decimal payedLitersDecimalForAmount =0m;
+                int? payedLitersNullable = null; // persisted value remains integer as before
+                if (TryParseDecimal(textBox6.Text, out decimal parsedPaidDecimal))
+                {
+                    payedLitersDecimalForAmount = parsedPaidDecimal;
+                    // try to persist integer part if possible
+                    if (int.TryParse(textBox6.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out int intval) ||
+                        int.TryParse(textBox6.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out intval))
+                    {
+                        payedLitersNullable = intval;
+                    }
+                }
 
                 if (!TryParseDecimal(weightTextBox.Text, out decimal? weightNullable))
                     weightNullable = null;
 
-                decimal amountDue = 0m;
+                decimal amountDue =0m;
                 if (TryParseDecimal(textBox7.Text, out decimal parsedAmount))
                     amountDue = parsedAmount;
                 else
-                    amountDue = (payedLitersNullable ?? 0) * unitPrice;
+                    amountDue = payedLitersDecimalForAmount * unitPrice;
 
                 using (var context = new DataContext())
                 {
@@ -1872,7 +1945,7 @@ namespace EntityFramework
             }
 
             if (!TryParseDecimal(textBox2.Text, out decimal nbrBags))
-                nbrBags = 0m;
+                nbrBags =0m;
 
             var nbrContainers = textBox3.Text.Trim();
 
@@ -1880,13 +1953,23 @@ namespace EntityFramework
                 nbrLitersNullable = null;
 
             if (!TryParseDecimal(textBox5.Text, out decimal unitPrice))
-                unitPrice = 0m;
+                unitPrice =0m;
 
-            if (!TryParseInt(textBox6.Text, out int? payedLitersNullable))
-                payedLitersNullable = null;
+            // Parse payed liters for amount calculation (allow decimals)
+            decimal payedLitersDecimalForAmount =0m;
+            int? payedLitersNullable = null; // keep persisted integer value if available
+            if (TryParseDecimal(textBox6.Text, out decimal parsedPaidDecimal))
+            {
+                payedLitersDecimalForAmount = parsedPaidDecimal;
+                if (int.TryParse(textBox6.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out int intval) ||
+                    int.TryParse(textBox6.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out intval))
+                {
+                    payedLitersNullable = intval;
+                }
+            }
 
             if (!TryParseDecimal(textBox7.Text, out decimal amountDue))
-                amountDue = (payedLitersNullable ?? 0) * unitPrice;
+                amountDue = payedLitersDecimalForAmount * unitPrice;
 
             if (!TryParseDecimal(weightTextBox.Text, out decimal? weightNullable))
                 weightNullable = null;
@@ -2156,6 +2239,44 @@ namespace EntityFramework
         private void label12_Click(object sender, EventArgs e)
         {
 
+        }
+
+        // Replace comma with dot in numeric text inputs to prevent using comma as decimal separator.
+        // This keeps caret position and avoids re-entrancy.
+        private void NoComma_TextChanged(object? sender, EventArgs e)
+        {
+            try
+            {   
+                if (suppressNoCommaTextChanged) return;
+                if (sender is not TextBox tb) return;
+                var original = tb.Text;
+                if (string.IsNullOrEmpty(original)) return;
+
+                // Replace comma with dot and also remove NBSP and ordinary spaces which can appear as thousand separators
+                var sanitized = original.Replace('\u00A0', ' ').Replace(" ", string.Empty).Replace(',', '.');
+
+                if (sanitized != original)
+                {
+                    var selStart = tb.SelectionStart;
+                    var wasHandling = false;
+                    // avoid re-entrancy by temporarily detaching
+                    tb.TextChanged -= NoComma_TextChanged;
+                    try
+                    {
+                        tb.Text = sanitized;
+                        // restore caret position as best as possible
+                        tb.SelectionStart = Math.Min(selStart, tb.Text.Length);
+                    }
+                    finally
+                    {
+                        tb.TextChanged += NoComma_TextChanged;
+                    }
+                }
+            }
+            catch
+            {
+                // swallow
+            }
         }
     }
 }

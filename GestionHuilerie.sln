@@ -5,7 +5,7 @@ VisualStudioVersion = 17.14.36623.8
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EntityFramework", "EntityFramework\EntityFramework.csproj", "{E398C36C-2151-45B0-A4A2-7014FFEFCCF2}"
 EndProject
-Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "Installation", "Installation\Installation.vdproj", "{7F71260A-47E1-444D-3699-6F6BE9CB0855}"
+Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "GestionHuilerie", "GestionHuilerie\GestionHuilerie.vdproj", "{0995C300-4A14-B253-5142-0F217B787955}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -28,12 +28,12 @@ Global
 		{E398C36C-2151-45B0-A4A2-7014FFEFCCF2}.Release|x64.Build.0 = Release|Any CPU
 		{E398C36C-2151-45B0-A4A2-7014FFEFCCF2}.Release|x86.ActiveCfg = Release|x86
 		{E398C36C-2151-45B0-A4A2-7014FFEFCCF2}.Release|x86.Build.0 = Release|x86
-		{7F71260A-47E1-444D-3699-6F6BE9CB0855}.Debug|Any CPU.ActiveCfg = Debug
-		{7F71260A-47E1-444D-3699-6F6BE9CB0855}.Debug|x64.ActiveCfg = Debug
-		{7F71260A-47E1-444D-3699-6F6BE9CB0855}.Debug|x86.ActiveCfg = Debug
-		{7F71260A-47E1-444D-3699-6F6BE9CB0855}.Release|Any CPU.ActiveCfg = Release
-		{7F71260A-47E1-444D-3699-6F6BE9CB0855}.Release|x64.ActiveCfg = Release
-		{7F71260A-47E1-444D-3699-6F6BE9CB0855}.Release|x86.ActiveCfg = Release
+		{0995C300-4A14-B253-5142-0F217B787955}.Debug|Any CPU.ActiveCfg = Debug
+		{0995C300-4A14-B253-5142-0F217B787955}.Debug|x64.ActiveCfg = Debug
+		{0995C300-4A14-B253-5142-0F217B787955}.Debug|x86.ActiveCfg = Debug
+		{0995C300-4A14-B253-5142-0F217B787955}.Release|Any CPU.ActiveCfg = Release
+		{0995C300-4A14-B253-5142-0F217B787955}.Release|x64.ActiveCfg = Release
+		{0995C300-4A14-B253-5142-0F217B787955}.Release|x86.ActiveCfg = Release
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

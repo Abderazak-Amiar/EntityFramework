@@ -181,8 +181,8 @@ namespace EntityFramework
                             {
                                 c.Item().Text($"Date : {vente.CreatedAt.ToString("g", fr)}").FontSize(9);
                                 c.Item().Text($"Litres : {vente.NbrLitres.ToString("N0", fr)}").FontSize(10);
-                                c.Item().Text($"Prix/L : {vente.Prix.ToString("N2", fr)}").FontSize(10);
-                                c.Item().PaddingTop(6).Text($"Montant : {vente.Montant.ToString("N2", fr)}").FontSize(11).Bold();
+                                c.Item().Text($"Prix/L : {vente.Prix.ToString("N0", fr)}").FontSize(10);
+                                c.Item().PaddingTop(6).Text($"Montant : {vente.Montant.ToString("N0", fr)}").FontSize(11).Bold();
                             });
 
                             col.Item().PaddingTop(8).LineHorizontal(1);
@@ -283,10 +283,21 @@ namespace EntityFramework
                                     // SQLite may return double; convert safely to decimal.
                                     var val = r2.GetValue(r2.GetOrdinal("DefaultPortion"));
                                     defaultPortionFraction = Convert.ToDecimal(val);
+
+                                    // Normalize: allow DefaultPortion stored either as a fraction (0..1) or as a percent (0..100).
+                                    if (defaultPortionFraction >1m)
+                                    {
+                                        // treat as percent (e.g.30 ->0.30)
+                                        defaultPortionFraction /=100m;
+                                    }
+
+                                    // clamp to [0,1]
+                                    if (defaultPortionFraction <0m) defaultPortionFraction =0m;
+                                    if (defaultPortionFraction >1m) defaultPortionFraction =1m;
                                 }
                                 catch
                                 {
-                                    defaultPortionFraction = 0m;
+                                    defaultPortionFraction =0m;
                                 }
                             }
                         }
@@ -300,22 +311,29 @@ namespace EntityFramework
                 Debug.WriteLine("QuestPDF: failed reading Parameters safely: " + ex.Message);
             }
 
-            // If DefaultPortion is stored as fraction 0..1, compute portion liters and delivered liters:
-            string? PortionLitersText = null;
-            string? DeliveredLitersText = null;
-            if (user.NbrLiters.HasValue && user.NbrLiters.Value != 0)
+            // If DefaultPortion is stored as fraction0..1, compute portion liters and delivered liters:
+            string? PortionLitersText = !string.IsNullOrWhiteSpace(user.DisplayPortion) ? user.DisplayPortion : null;
+            string? DeliveredLitersText = !string.IsNullOrWhiteSpace(user.DisplayDelivered) ? user.DisplayDelivered : null;
+
+            if ((PortionLitersText == null || DeliveredLitersText == null) && user.NbrLiters.HasValue && user.NbrLiters.Value !=0)
             {
                 var totalLiters = (decimal)user.NbrLiters.Value;
 
-                if (defaultPortionFraction > 0m)
+                // Use persisted numeric values if available
+                if (user.PortionLiters.HasValue && user.DeliveredLiters.HasValue)
+                {
+                    PortionLitersText ??= FormatDecimalSmart(user.PortionLiters.Value, fr);
+                    DeliveredLitersText ??= FormatDecimalSmart(user.DeliveredLiters.Value, fr);
+                }
+                else if (defaultPortionFraction >0m)
                 {
                     var portionLiters = defaultPortionFraction * totalLiters;
                     // Delivered = produced - portion
                     var deliveredLiters = totalLiters - portionLiters;
-                    if (deliveredLiters < 0m) deliveredLiters = 0m;
+                    if (deliveredLiters <0m) deliveredLiters =0m;
 
-                    PortionLitersText = FormatDecimalSmart(portionLiters, fr);
-                    DeliveredLitersText = FormatDecimalSmart(deliveredLiters, fr);
+                    PortionLitersText ??= FormatDecimalSmart(portionLiters, fr);
+                    DeliveredLitersText ??= FormatDecimalSmart(deliveredLiters, fr);
                 }
             }
 

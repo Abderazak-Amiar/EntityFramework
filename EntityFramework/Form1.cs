@@ -173,16 +173,16 @@ namespace EntityFramework
             {
                 var numericTextBoxes = new TextBox?[]
                 {
-                    textBox2, // nbr bags (decimal)
-                    textBox4, // nbr liters (int)
-                    textBox5, // unit price
-                    textBox6, // payed liters (decimal)
-                    textBox7, // amount due (decimal)
-                    weightTextBox,
-                    txtPricePerLiter,
-                    txtPortion,
-                    txtVenteNbrLitres,
-                    txtVentePrix
+                        textBox2, // nbr bags (decimal)
+                        textBox4, // nbr liters (int)
+                        textBox5, // unit price
+                        textBox6, // payed liters (decimal)
+                        textBox7, // amount due (decimal)
+                        weightTextBox,
+                        txtPricePerLiter,
+                        txtPortion,
+                        txtVenteNbrLitres,
+                        txtVentePrix
                 };
 
                 foreach (var tb in numericTextBoxes)
@@ -349,7 +349,8 @@ namespace EntityFramework
             try
             {
                 using var ctx = new DataContext();
-                var users = ctx.Users?.OrderBy(u => u.Name).ToList() ?? new List<User>();
+                // Sorted by Id descending so newest/last-inserted users appear first in ItemList
+                var users = ctx.Users?.OrderByDescending(u => u.Id).ToList() ?? new List<User>();
                 DatabaseUsers = users;
                 usersBinding.DataSource = DatabaseUsers;
                 // Ensure grid doesn't auto-select first row
@@ -795,10 +796,10 @@ namespace EntityFramework
                 // All TextBox inputs across tabs (defensive null checks)
                 var textBoxes = new TextBox[]
                 {
-                        nameTextBox, addressTextBox,
-                        textBox1, textBox2, textBox3, textBox4, textBox5, textBox6, textBox7,
-                        weightTextBox,
-                        txtCompanyName, txtCompanyAddress, txtCompanyPhone, txtPricePerLiter, txtPortion
+                            nameTextBox, addressTextBox,
+                            textBox1, textBox2, textBox3, textBox4, textBox5, textBox6, textBox7,
+                            weightTextBox,
+                            txtCompanyName, txtCompanyAddress, txtCompanyPhone, txtPricePerLiter, txtPortion
                 };
 
                 foreach (var tb in textBoxes)
@@ -1745,7 +1746,7 @@ namespace EntityFramework
                     if (yearComboBox != null && yearComboBox.SelectedItem != null)
                     {
                         var sel = yearComboBox.SelectedItem.ToString();
-                        if (!string.IsNullOrEmpty(sel) && !sel.Equals("Tous", StringComparison.CurrentCultureIgnoreCase))
+                        if (!string.IsNullOrEmpty(sel) && !sel.Equals("Tous", StringComparison.InvariantCultureIgnoreCase))
                         {
                             if (int.TryParse(sel, out int selYear))
                             {
@@ -1804,8 +1805,8 @@ namespace EntityFramework
 
                 var ci = CultureInfo.GetCultureInfo("fr-FR");
 
-#if DEBUG   
-                Debug.WriteLine($"[Stats DBG] produced={totalLitresProduites}, portionFraction={portionFraction}, portionEntrées={totalPortionEntrees}, portionVendues={totalPortionVendues}, delivered={totalNombreLitresLivrees}");
+#if DEBUG
+                    Debug.WriteLine($"[Stats DBG] produced={totalLitresProduites}, portionFraction={portionFraction}, portionEntrées={totalPortionEntrees}, portionVendues={totalPortionVendues}, delivered={totalNombreLitresLivrees}");
 #endif
 
                 if (dgvStats != null)
@@ -2127,7 +2128,7 @@ namespace EntityFramework
             }
             catch
             {
-                // swallow UI errors
+                // swallow
             }
         }
         // Designer-wired print button handler (was missing)
@@ -2221,10 +2222,10 @@ namespace EntityFramework
         {
             var candidates = new[]
             {
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "SumatraPDF", "SumatraPDF.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "SumatraPDF", "SumatraPDF.exe"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SumatraPDF", "SumatraPDF.exe")
-                };
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "SumatraPDF", "SumatraPDF.exe"),
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "SumatraPDF", "SumatraPDF.exe"),
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SumatraPDF", "SumatraPDF.exe")
+                    }; 
 
             return candidates.FirstOrDefault(File.Exists);
         }

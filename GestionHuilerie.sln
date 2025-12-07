@@ -29,11 +29,17 @@ Global
 		{E398C36C-2151-45B0-A4A2-7014FFEFCCF2}.Release|x86.ActiveCfg = Release|x86
 		{E398C36C-2151-45B0-A4A2-7014FFEFCCF2}.Release|x86.Build.0 = Release|x86
 		{0995C300-4A14-B253-5142-0F217B787955}.Debug|Any CPU.ActiveCfg = Debug
+		{0995C300-4A14-B253-5142-0F217B787955}.Debug|Any CPU.Build.0 = Debug
 		{0995C300-4A14-B253-5142-0F217B787955}.Debug|x64.ActiveCfg = Debug
+		{0995C300-4A14-B253-5142-0F217B787955}.Debug|x64.Build.0 = Debug
 		{0995C300-4A14-B253-5142-0F217B787955}.Debug|x86.ActiveCfg = Debug
+		{0995C300-4A14-B253-5142-0F217B787955}.Debug|x86.Build.0 = Debug
 		{0995C300-4A14-B253-5142-0F217B787955}.Release|Any CPU.ActiveCfg = Release
+		{0995C300-4A14-B253-5142-0F217B787955}.Release|Any CPU.Build.0 = Release
 		{0995C300-4A14-B253-5142-0F217B787955}.Release|x64.ActiveCfg = Release
+		{0995C300-4A14-B253-5142-0F217B787955}.Release|x64.Build.0 = Release
 		{0995C300-4A14-B253-5142-0F217B787955}.Release|x86.ActiveCfg = Release
+		{0995C300-4A14-B253-5142-0F217B787955}.Release|x86.Build.0 = Release
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -418,6 +418,10 @@ namespace EntityFramework
                 if (textBox5 == null) return;
                 if (!string.IsNullOrWhiteSpace(textBox5.Text)) return;
 
+                // Do not populate default unit price when the source liters (textBox4) is empty.
+                if (textBox4 != null && string.IsNullOrWhiteSpace(textBox4.Text))
+                    return;
+
                 using var ctx = new DataContext();
                 var parameters = ctx.Parameters?.FirstOrDefault(p => p.Id == 1);
                 if (parameters != null && parameters.DefaultUnitPrice != 0m)
@@ -532,17 +536,36 @@ namespace EntityFramework
 
         private void ItemList_DataBindingComplete(object? sender, DataGridViewBindingCompleteEventArgs e)
         {
-            // Number visible rows in the "N°" column (if present)
+            // Number visible rows in the "N°" column (if present) - use the User.Id instead of a row counter
             try
             {
                 if (ItemList != null && ItemList.Columns.Contains("colNumber"))
                 {
-                    for (int i =0; i < ItemList.Rows.Count; i++)
+                    for (int i = 0; i < ItemList.Rows.Count; i++)
                     {
                         var row = ItemList.Rows[i];
                         // Only set numbering for non-new rows
-                        if (!row.IsNewRow)
-                            row.Cells["colNumber"].Value = (i +1).ToString(CultureInfo.CurrentCulture);
+                        if (row.IsNewRow) continue;
+
+                        // Prefer the bound entity's Id if available
+                        try
+                        {
+                            var bound = row.DataBoundItem as User;
+                            if (bound != null)
+                            {
+                                row.Cells["colNumber"].Value = bound.Id.ToString(CultureInfo.CurrentCulture);
+                            }
+                            else
+                            {
+                                // fallback to a1-based index when no bound item is present
+                                row.Cells["colNumber"].Value = (i + 1).ToString(CultureInfo.CurrentCulture);
+                            }
+                        }
+                        catch
+                        {
+                            // fallback on any error
+                            try { row.Cells["colNumber"].Value = (i + 1).ToString(CultureInfo.CurrentCulture); } catch { }
+                        }
                     }
                 }
 
@@ -564,7 +587,7 @@ namespace EntityFramework
             try
             {
                 if (ItemList == null) return;
-                if (e.ColumnIndex <0 || e.ColumnIndex >= ItemList.Columns.Count) return;
+                if (e.ColumnIndex < 0 || e.ColumnIndex >= ItemList.Columns.Count) return;
 
                 var col = ItemList.Columns[e.ColumnIndex];
                 if (!string.Equals(col.Name, "colRendement", StringComparison.InvariantCultureIgnoreCase))
@@ -929,8 +952,12 @@ namespace EntityFramework
                     else
                         textBox6.Text = string.Empty;
 
-                    if (unitPrice != 0m)
-                        textBox5.Text = unitPrice.ToString(CultureInfo.CurrentCulture);
+                    // Only populate unit price when source liters is present (or when textBox4 is not in the UI)
+                    if (!(textBox4 != null && string.IsNullOrWhiteSpace(textBox4.Text)))
+                    {
+                        if (unitPrice != 0m)
+                            textBox5.Text = unitPrice.ToString(CultureInfo.CurrentCulture);
+                    }
 
                     // Recalculate total using existing shared method
                     PriceOrPaidLiters_TextChanged(this, EventArgs.Empty);
@@ -1074,7 +1101,7 @@ namespace EntityFramework
                 var amount = payedLitersDecimal * unitPrice;
 
                 // Show monetary value with two decimals using current culture
-                SetTextPreservingFormatting(textBox7, amount !=0m ? amount.ToString("N2", CultureInfo.CurrentCulture) : string.Empty);
+                SetTextPreservingFormatting(textBox7, amount != 0m ? amount.ToString("N2", CultureInfo.CurrentCulture) : string.Empty);
             }
             catch
             {
@@ -1514,7 +1541,9 @@ namespace EntityFramework
                 if (selectedUser.UnitPriceLiter.HasValue && selectedUser.UnitPriceLiter.Value != 0m)
                 {
                     effectiveUnitPrice = selectedUser.UnitPriceLiter.Value;
-                    textBox5.Text = FormatDecimalSmart(effectiveUnitPrice);
+                    // Only populate the unit price textbox if source liters (textBox4) has a value
+                    if (!(textBox4 != null && string.IsNullOrWhiteSpace(textBox4.Text)))
+                        textBox5.Text = FormatDecimalSmart(effectiveUnitPrice);
                     haveUnitPrice = true;
                 }
                 else
@@ -1528,7 +1557,9 @@ namespace EntityFramework
                             if (parameters != null && parameters.DefaultUnitPrice != 0m)
                             {
                                 effectiveUnitPrice = parameters.DefaultUnitPrice;
-                                textBox5.Text = FormatDecimalSmart(effectiveUnitPrice);
+                                // Only populate when source liters present
+                                if (!(textBox4 != null && string.IsNullOrWhiteSpace(textBox4.Text)))
+                                    textBox5.Text = FormatDecimalSmart(effectiveUnitPrice);
                                 haveUnitPrice = true;
                             }
                             else
@@ -1576,12 +1607,12 @@ namespace EntityFramework
                         // Show only the value + unit in the input textbox (no "Rendement:" label)
                         dispRend = $"{selectedUser.DisplayRendement} L/Q";
                     }
-                    else if (selectedUser.Weight.HasValue && selectedUser.Weight.Value !=0m && selectedUser.NbrLiters.HasValue && selectedUser.NbrLiters.Value !=0)
+                    else if (selectedUser.Weight.HasValue && selectedUser.Weight.Value != 0m && selectedUser.NbrLiters.HasValue && selectedUser.NbrLiters.Value != 0)
                     {
                         // compute fallback when persisted display not available
                         var litres = (decimal)selectedUser.NbrLiters.Value;
                         var poids = selectedUser.Weight.Value;
-                        var rendement = (litres *100m) / poids;
+                        var rendement = (litres * 100m) / poids;
                         // Only show the formatted value plus unit
                         dispRend = $"{FormatDecimalSmart(rendement)} L/Q";
                     }
@@ -1845,7 +1876,7 @@ namespace EntityFramework
                 }
 
                 if (!TryParseDecimal(textBox2.Text, out decimal nbrBags))
-                    nbrBags =0m;
+                    nbrBags = 0m;
 
                 var nbrContainers = textBox3.Text.Trim();
 
@@ -1853,10 +1884,10 @@ namespace EntityFramework
                     nbrLitersNullable = null;
 
                 if (!TryParseDecimal(textBox5.Text, out decimal unitPrice))
-                    unitPrice =0m;
+                    unitPrice = 0m;
 
                 // Parse payed liters as decimal for amount calculation (allow fractional liters)
-                decimal payedLitersDecimalForAmount =0m;
+                decimal payedLitersDecimalForAmount = 0m;
                 int? payedLitersNullable = null; // persisted value remains integer as before
                 if (TryParseDecimal(textBox6.Text, out decimal parsedPaidDecimal))
                 {
@@ -1872,7 +1903,7 @@ namespace EntityFramework
                 if (!TryParseDecimal(weightTextBox.Text, out decimal? weightNullable))
                     weightNullable = null;
 
-                decimal amountDue =0m;
+                decimal amountDue = 0m;
                 if (TryParseDecimal(textBox7.Text, out decimal parsedAmount))
                     amountDue = parsedAmount;
                 else
@@ -1945,7 +1976,7 @@ namespace EntityFramework
             }
 
             if (!TryParseDecimal(textBox2.Text, out decimal nbrBags))
-                nbrBags =0m;
+                nbrBags = 0m;
 
             var nbrContainers = textBox3.Text.Trim();
 
@@ -1953,10 +1984,10 @@ namespace EntityFramework
                 nbrLitersNullable = null;
 
             if (!TryParseDecimal(textBox5.Text, out decimal unitPrice))
-                unitPrice =0m;
+                unitPrice = 0m;
 
             // Parse payed liters for amount calculation (allow decimals)
-            decimal payedLitersDecimalForAmount =0m;
+            decimal payedLitersDecimalForAmount = 0m;
             int? payedLitersNullable = null; // keep persisted integer value if available
             if (TryParseDecimal(textBox6.Text, out decimal parsedPaidDecimal))
             {
@@ -2246,7 +2277,7 @@ namespace EntityFramework
         private void NoComma_TextChanged(object? sender, EventArgs e)
         {
             try
-            {   
+            {
                 if (suppressNoCommaTextChanged) return;
                 if (sender is not TextBox tb) return;
                 var original = tb.Text;
@@ -2278,6 +2309,7 @@ namespace EntityFramework
                 // swallow
             }
         }
+
     }
 }
 

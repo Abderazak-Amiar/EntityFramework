@@ -3,6 +3,7 @@ using System;
 using EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,12 +11,36 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace EntityFramework.Migrations
 {
     [DbContext(typeof(DataContext))]
-    partial class DataContextModelSnapshot : ModelSnapshot
+    [Migration("20251202230918_AddLicence")]
+    partial class AddLicence
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.22");
+
+            modelBuilder.Entity("EntityFramework.Licence", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("LicenceType")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Licences");
+                });
 
             modelBuilder.Entity("EntityFramework.Parameters", b =>
                 {
@@ -39,10 +64,6 @@ namespace EntityFramework.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<decimal>("DefaultUnitPrice")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("LicenseKey")
-                        .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -70,22 +91,11 @@ namespace EntityFramework.Migrations
                     b.Property<DateTime?>("CreatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<decimal?>("DeliveredLiters")
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("DisplayAmountDue")
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("DisplayDelivered")
-                        .HasMaxLength(50)
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("DisplayNbrBags")
-                        .HasMaxLength(50)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("DisplayPortion")
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
 
@@ -126,9 +136,6 @@ namespace EntityFramework.Migrations
                     b.Property<string>("Phone")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal?>("PortionLiters")
                         .HasColumnType("TEXT");
 
                     b.Property<decimal?>("UnitPriceLiter")

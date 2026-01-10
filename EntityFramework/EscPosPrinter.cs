@@ -1,11 +1,13 @@
 namespace EntityFramework
 {
+    using Microsoft.EntityFrameworkCore;
     using QuestPDF.Fluent;
     using QuestPDF.Helpers;
     using QuestPDF.Infrastructure;
     using SkiaSharp;
     using Svg.Skia;
     using System;
+    using System.Collections.Generic;
     using System.Diagnostics;
     using System.Globalization;
     using System.IO;
@@ -18,6 +20,14 @@ namespace EntityFramework
         {
             if (user is null) throw new ArgumentNullException(nameof(user));
             QuestPdfPrinter.GeneratePdfAndOpen(user);
+        }
+
+        // Print a Vente receipt using QuestPdfPrinter helper for ventes
+
+        public static void PrintVenteReceipt(string? printerName, Vente vente, int dotsPerLine = 576, bool cut = false)
+        {
+            if (vente is null) throw new ArgumentNullException(nameof(vente));
+            QuestPdfPrinter.GeneratePdfAndOpenVente(vente);
         }
     }
 
@@ -53,6 +63,145 @@ namespace EntityFramework
             }
         }
 
+        // New: generate & open a small PDF receipt for a Vente using same header logic as user receipts
+
+        public static void GeneratePdfAndOpenVente(Vente vente) 
+        {
+            if (vente is null) throw new ArgumentNullException(nameof(vente));
+
+            try
+            {
+                var fr = CultureInfo.GetCultureInfo("fr-FR");
+
+                var document = Document.Create(container =>
+                {
+                    container.Page(page =>
+                    {
+                        page.Size(new PageSize(width: 204, height: 400));
+                        page.Margin(6);
+                        page.DefaultTextStyle(x => x.FontSize(10).FontColor(Colors.Black));
+
+                        // Header: reuse logo/company layout similar to user receipt
+                        page.Header().Column(col =>
+                        {
+                            byte[]? imageBytes = null;
+                            var baseDir = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
+                            var candidates = new[]
+                            {
+                                Path.Combine(baseDir, "Images", "logoM3insra.svg"),
+                                Path.Combine(baseDir, "logoM3insra.svg")
+                            };
+
+                            foreach (var path in candidates)
+                            {
+                                try
+                                {
+                                    if (!File.Exists(path)) continue;
+                                    var raw = File.ReadAllBytes(path);
+                                    imageBytes = path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
+                                        ? RenderSvgToPng(raw, targetWidthPx: 800)
+                                        : raw;
+                                    Debug.WriteLine($"QuestPDF: using image file {path}");
+                                    break;
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.WriteLine($"QuestPDF: failed reading {path}: {ex.Message}");
+                                }
+                            }
+
+                            if (imageBytes == null)
+                            {
+                                try
+                                {
+                                    var asm = Assembly.GetExecutingAssembly();
+                                    var names = asm.GetManifestResourceNames();
+                                    var found = names.FirstOrDefault(n => n.EndsWith("logoM3insra.svg", StringComparison.OrdinalIgnoreCase));
+                                    if (found != null)
+                                    {
+                                        using var s = asm.GetManifestResourceStream(found);
+                                        if (s != null)
+                                        {
+                                            using var ms = new MemoryStream();
+                                            s.CopyTo(ms);
+                                            var raw = ms.ToArray();
+                                            imageBytes = found.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
+                                                ? RenderSvgToPng(raw, targetWidthPx: 800)
+                                                : raw;
+                                            Debug.WriteLine($"QuestPDF: using embedded resource {found}");
+                                        }
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.WriteLine($"QuestPDF: embedded resource load failed: {ex.Message}");
+                                }
+                            }
+
+                            if (imageBytes != null && imageBytes.Length > 0)
+                            {
+                                col.Item().AlignCenter().Width(70).Image(imageBytes);
+                            }
+                            else
+                            {
+                                col.Item().PaddingTop(0).Text("Logo de l'entreprise").FontSize(12).AlignCenter();
+                            }
+
+                            // Company info from Parameters (safe read)
+                            try
+                            {
+                                using var ctx = new DataContext();
+                                var parameters = ctx.Parameters?.FirstOrDefault(p => p.Id == 1);
+                                if (parameters != null)
+                                {
+                                    if (!string.IsNullOrWhiteSpace(parameters.CompanyName))
+                                        col.Item().Text(parameters.CompanyName).FontSize(11).Bold().AlignCenter();
+
+                                    if (!string.IsNullOrWhiteSpace(parameters.CompanyAddress))
+                                        col.Item().Text(parameters.CompanyAddress).FontSize(9).AlignCenter();
+
+                                    if (!string.IsNullOrWhiteSpace(parameters.CompanyPhone))
+                                        col.Item().Text(parameters.CompanyPhone).FontSize(9).AlignCenter();
+                                }
+                            }
+                            catch
+                            {
+                                // swallow
+                            }
+
+                            col.Item().PaddingTop(8).Text("Reçu de vente").FontSize(12).Bold().AlignCenter();
+                            col.Item().PaddingVertical(4).LineHorizontal(1);
+                        });
+
+                        page.Content().Column(col =>
+                        {
+                            col.Item().PaddingVertical(4).LineHorizontal(1);
+
+                            col.Item().Column(c =>
+                            {
+                                c.Item().Text($"Date : {vente.CreatedAt.ToString("g", fr)}").FontSize(9);
+                                c.Item().Text($"Litres : {vente.NbrLitres.ToString("N0", fr)}").FontSize(10);
+                                c.Item().Text($"Prix/L : {vente.Prix.ToString("N0", fr)}").FontSize(10);
+                                c.Item().PaddingTop(6).Text($"Montant : {vente.Montant.ToString("N0", fr)}").FontSize(11).Bold();
+                            });
+
+                            col.Item().PaddingTop(8).LineHorizontal(1);
+                            col.Item().Text("Merci pour votre confiance").AlignCenter().FontSize(9).Bold();
+                        });
+
+                        // No dotted footer line — removed as requested
+                    });
+                });
+
+                var pdfBytes = GeneratePdfBytes(document);
+                OpenPdfInDefaultViewer(pdfBytes, $"vente_{DateTime.Now:yyyyMMddHHmmss}.pdf");
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("Failed generating vente PDF: " + ex.Message, ex);
+            }
+        }
+
         private static IDocument BuildDocument(User user)
         {
             // Culture for French formatting
@@ -79,6 +228,114 @@ namespace EntityFramework
             string? UnitPriceText = (user.UnitPriceLiter.HasValue && user.UnitPriceLiter.Value != 0m) ? FormatDecimalSmart(user.UnitPriceLiter.Value, fr) : null;
             string? PayedLitersText = (user.PayedLiters.HasValue && user.PayedLiters.Value != 0) ? user.PayedLiters.Value.ToString(fr) : null;
             string? AmountDueText = (user.AmountDue.HasValue && user.AmountDue.Value != 0m) ? FormatDecimalSmart(user.AmountDue.Value, fr) : null;
+
+            // Calculate Rendement (olive oil yield per quintal) when both poids and litres available:
+            // Rendement = (Litres * 100) / Poids  -> litres per 100kg
+            string? RendementText = null;
+            try
+            {
+                if (user.Weight.HasValue && user.Weight.Value != 0m && user.NbrLiters.HasValue && user.NbrLiters.Value != 0)
+                {
+                    var litres = (decimal)user.NbrLiters.Value;
+                    var poids = user.Weight.Value;
+                    var rendement = (litres * 100m) / poids;
+                    RendementText = FormatDecimalSmart(rendement, fr);
+                }
+            }
+            catch
+            {
+                RendementText = null;
+            }
+
+            // Default portion fraction read from Parameters (0..1). If missing, remains 0.
+            decimal defaultPortionFraction = 0m;
+            try
+            {
+                using var ctx = new DataContext();
+                var conn = ctx.Database.GetDbConnection();
+                conn.Open();
+
+                using (var pragmaCmd = conn.CreateCommand())
+                {
+                    pragmaCmd.CommandText = "PRAGMA table_info('Parameters');";
+                    using var r = pragmaCmd.ExecuteReader();
+                    var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    while (r.Read())
+                        cols.Add(r.GetString(r.GetOrdinal("name")));
+
+                    var selectCols = new List<string>();
+                    if (cols.Contains("CompanyName")) selectCols.Add("CompanyName");
+                    if (cols.Contains("CompanyAddress")) selectCols.Add("CompanyAddress");
+                    if (cols.Contains("CompanyPhone")) selectCols.Add("CompanyPhone");
+                    if (cols.Contains("DefaultPortion")) selectCols.Add("DefaultPortion");
+
+                    if (selectCols.Count > 0)
+                    {
+                        using var selectCmd = conn.CreateCommand();
+                        selectCmd.CommandText = "SELECT " + string.Join(", ", selectCols) + " FROM Parameters WHERE Id = 1 LIMIT 1;";
+                        using var r2 = selectCmd.ExecuteReader();
+                        if (r2.Read())
+                        {
+                            if (selectCols.Contains("DefaultPortion") && !r2.IsDBNull(r2.GetOrdinal("DefaultPortion")))
+                            {
+                                try
+                                {
+                                    // SQLite may return double; convert safely to decimal.
+                                    var val = r2.GetValue(r2.GetOrdinal("DefaultPortion"));
+                                    defaultPortionFraction = Convert.ToDecimal(val);
+
+                                    // Normalize: allow DefaultPortion stored either as a fraction (0..1) or as a percent (0..100).
+                                    if (defaultPortionFraction >1m)
+                                    {
+                                        // treat as percent (e.g.30 ->0.30)
+                                        defaultPortionFraction /=100m;
+                                    }
+
+                                    // clamp to [0,1]
+                                    if (defaultPortionFraction <0m) defaultPortionFraction =0m;
+                                    if (defaultPortionFraction >1m) defaultPortionFraction =1m;
+                                }
+                                catch
+                                {
+                                    defaultPortionFraction =0m;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                conn.Close();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("QuestPDF: failed reading Parameters safely: " + ex.Message);
+            }
+
+            // If DefaultPortion is stored as fraction0..1, compute portion liters and delivered liters:
+            string? PortionLitersText = !string.IsNullOrWhiteSpace(user.DisplayPortion) ? user.DisplayPortion : null;
+            string? DeliveredLitersText = !string.IsNullOrWhiteSpace(user.DisplayDelivered) ? user.DisplayDelivered : null;
+
+            if ((PortionLitersText == null || DeliveredLitersText == null) && user.NbrLiters.HasValue && user.NbrLiters.Value !=0)
+            {
+                var totalLiters = (decimal)user.NbrLiters.Value;
+
+                // Use persisted numeric values if available
+                if (user.PortionLiters.HasValue && user.DeliveredLiters.HasValue)
+                {
+                    PortionLitersText ??= FormatDecimalSmart(user.PortionLiters.Value, fr);
+                    DeliveredLitersText ??= FormatDecimalSmart(user.DeliveredLiters.Value, fr);
+                }
+                else if (defaultPortionFraction >0m)
+                {
+                    var portionLiters = defaultPortionFraction * totalLiters;
+                    // Delivered = produced - portion
+                    var deliveredLiters = totalLiters - portionLiters;
+                    if (deliveredLiters <0m) deliveredLiters =0m;
+
+                    PortionLitersText ??= FormatDecimalSmart(portionLiters, fr);
+                    DeliveredLitersText ??= FormatDecimalSmart(deliveredLiters, fr);
+                }
+            }
 
             return Document.Create(container =>
             {
@@ -154,38 +411,95 @@ namespace EntityFramework
                             col.Item().PaddingTop(0).Text("Logo de l'entreprise").FontSize(12).AlignCenter();
                         }
 
+                        // Company info (from Parameters)
+                        try
+                        {
+                            using var ctx = new DataContext();
+                            var parameters = ctx.Parameters?.FirstOrDefault(p => p.Id == 1);
+                            if (parameters != null)
+                            {
+                                if (!string.IsNullOrWhiteSpace(parameters.CompanyName))
+                                    col.Item().Text(parameters.CompanyName).FontSize(11).Bold().AlignCenter();
+
+                                if (!string.IsNullOrWhiteSpace(parameters.CompanyAddress))
+                                    col.Item().Text(parameters.CompanyAddress).FontSize(9).AlignCenter();
+
+                                if (!string.IsNullOrWhiteSpace(parameters.CompanyPhone))
+                                    col.Item().Text(parameters.CompanyPhone).FontSize(9).AlignCenter();
+                            }
+                        }
+                        catch
+                        {
+                            // swallow - we already logged earlier
+                        }
+                      
+                        // Add a top margin before the "Ticket" title to increase spacing from the header
+                    
+                        col.Item().PaddingVertical(4).LineHorizontal(1);
                         col.Item().Text("Ticket").FontSize(14).Bold().AlignCenter();
+                        col.Item().Text(user.Id.ToString(fr)).FontSize(42).Bold().AlignCenter();
                         col.Item().PaddingVertical(4).LineHorizontal(1);
                     });
 
                     page.Content().Column(col =>
                     {
-                        void AddIfNotEmpty(string? text)
+
+                        // Replace the simple vertical list with a two-column label/value table.
+                        col.Item().Element(containerTable =>
                         {
-                            if (!string.IsNullOrWhiteSpace(text))
-                                col.Item().Text(text);
-                        }
+                            containerTable.Table(table =>
+                            {
+                                // Define two columns: label (fixed) and value (fill)
+                                table.ColumnsDefinition(columns =>
+                                {
+                                    columns.ConstantColumn(60);    // label column (px)
+                                    columns.RelativeColumn();      // value column (fills)
+                                });
 
-                        col.Item().PaddingVertical(4).LineHorizontal(1);
+                                // Helper to add a labeled row if the value is not empty.
+                                void AddRow(string label, string? value)
+                                {
+                                    if (string.IsNullOrWhiteSpace(value)) return;
 
-                        // Always include ID
-                        col.Item().Text($"N°: {user.Id}");
+                                    if(label != "N°")
+                                    {
+                                  
+                                        table.Cell().PaddingVertical(2).Text(label).FontSize(9).SemiBold();
+                                        table.Cell().PaddingVertical(2).Text(value).FontSize(9);
+                                    }
+                                }
 
-                        // Use precomputed strings only (never access nullable.Value here)
-                        AddIfNotEmpty(NameText is null ? null : $"Nom: {NameText}");
-                        AddIfNotEmpty(PhoneText is null ? null : $"Téléphone: {PhoneText}");
-                        AddIfNotEmpty(AddressText is null ? null : $"Adresse: {AddressText}");
-                        AddIfNotEmpty(NbrBagsText is null ? null : $"Sacs: {NbrBagsText}");
-                        AddIfNotEmpty(NbrContainersText is null ? null : $"Bidons: {NbrContainersText}");
-                        AddIfNotEmpty(WeightText is null ? null : $"Poids: {WeightText}");
-                        AddIfNotEmpty(NbrLitersText is null ? null : $"Litres: {NbrLitersText}");
-                        AddIfNotEmpty(UnitPriceText is null ? null : $"Prix/L: {UnitPriceText}");
-                        AddIfNotEmpty(PayedLitersText is null ? null : $"Litres payés: {PayedLitersText}");
-                        AddIfNotEmpty(AmountDueText is null ? null : $"Montant dû: {AmountDueText}");
+                                // Always include ID as first row
+
+                                AddRow("Nom", NameText);
+                                AddRow("Tél", PhoneText);
+                                AddRow("Adresse", AddressText);
+                                AddRow("Sacs", NbrBagsText);
+                                AddRow("Bidons", NbrContainersText);
+                                AddRow("Poids", WeightText);
+
+                                // NEW: include Rendement (litres per 100kg) when calculated
+                                AddRow("Rendement", !string.IsNullOrWhiteSpace(RendementText) ? $"{RendementText} L/Q" : null);
+
+                                // Quantité(L)
+                                AddRow("Quantité(L)", NbrLitersText);
+
+                                // If "Montant dû" is empty and we have a portion, include Portion and Q.Livrée (produced - portion)
+                                if (string.IsNullOrWhiteSpace(AmountDueText) && !string.IsNullOrWhiteSpace(PortionLitersText) && !string.IsNullOrWhiteSpace(DeliveredLitersText))
+                                {
+                                    AddRow("Portion(L)", $"{PortionLitersText}");
+                                    AddRow("Q.Livrée(L)", $"{DeliveredLitersText}");
+                                }
+
+                                AddRow("Prix/L", UnitPriceText);
+                                AddRow("Litres payés", PayedLitersText);
+                                AddRow("Montant dû", AmountDueText);
+                            });
+                        });
 
                         col.Item().PaddingTop(6).Text($"Imprimé le: {DateTime.Now.ToString("f", fr)}").FontSize(9);
                         col.Item().PaddingVertical(6).LineHorizontal(1);
-                        col.Item().Text("Merci").AlignCenter().FontSize(9);
+                        col.Item().Text("Merci pour votre confiance").AlignCenter().FontSize(9).Bold();
                     });
                 });
             });

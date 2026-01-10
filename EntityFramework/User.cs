@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Globalization;
 
@@ -42,6 +43,20 @@ namespace EntityFramework
         [MaxLength(50)]
         public string? DisplayAmountDue { get; set; }
 
+        // NEW: persisted formatted rendement (litres per100kg). Use migrations to add this column.
+        [MaxLength(50)]
+        public string? DisplayRendement { get; set; }
+
+        // NEW: persisted portion values (liters) and their display strings
+        public decimal? PortionLiters { get; set; }
+        public decimal? DeliveredLiters { get; set; }
+
+        [MaxLength(50)]
+        public string? DisplayPortion { get; set; }
+
+        [MaxLength(50)]
+        public string? DisplayDelivered { get; set; }
+
         // Convenience computed properties (not stored)
         [NotMapped]
         public string? NbrBagsFormatted => FormatDecimalSmart(NbrBags);
@@ -51,10 +66,16 @@ namespace EntityFramework
 
         private static string FormatDecimalSmart(decimal value)
         {
-            var fr = CultureInfo.GetCultureInfo("fr-FR");
+            // Use invariant culture so decimal separator is '.'
+            var ci = CultureInfo.InvariantCulture;
             return decimal.Truncate(value) == value
-                ? value.ToString("N0", fr)
-                : value.ToString("N1", fr);
+                ? value.ToString("N0", ci)
+                : value.ToString("N1", ci);
         }
+
+        public DateTime? CreatedAt { get; set; }
+
+        // NEW: persisted mode flag (true = Portion, false = Paiement). Nullable for migration safety.
+        public bool? IsPortionMode { get; set; }
     }
 }

@@ -3,6 +3,7 @@ using System;
 using EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace EntityFramework.Migrations
 {
     [DbContext(typeof(DataContext))]
-    partial class DataContextModelSnapshot : ModelSnapshot
+    [Migration("20251121090221_AddParametersFields")]
+    partial class AddParametersFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.22");
@@ -23,7 +26,7 @@ namespace EntityFramework.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("CompanyAddress")
+                    b.Property<string>("CompanyAddressPhone")
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
@@ -31,8 +34,8 @@ namespace EntityFramework.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("CompanyPhone")
-                        .HasMaxLength(50)
+                    b.Property<string>("CultureName")
+                        .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
                     b.Property<decimal>("DefaultPortion")
@@ -41,12 +44,18 @@ namespace EntityFramework.Migrations
                     b.Property<decimal>("DefaultUnitPrice")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("LicenseKey")
+                    b.Property<decimal>("DefaultWeightUnit")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PrinterName")
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("UseSilentPrinting")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -67,29 +76,11 @@ namespace EntityFramework.Migrations
                     b.Property<decimal?>("AmountDue")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime?>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal?>("DeliveredLiters")
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("DisplayAmountDue")
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("DisplayDelivered")
-                        .HasMaxLength(50)
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("DisplayNbrBags")
-                        .HasMaxLength(50)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("DisplayPortion")
-                        .HasMaxLength(50)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("DisplayRendement")
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
 
@@ -100,9 +91,6 @@ namespace EntityFramework.Migrations
                     b.Property<string>("DisplayWeight")
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
-
-                    b.Property<bool?>("IsPortionMode")
-                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -128,9 +116,6 @@ namespace EntityFramework.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
 
-                    b.Property<decimal?>("PortionLiters")
-                        .HasColumnType("TEXT");
-
                     b.Property<decimal?>("UnitPriceLiter")
                         .HasColumnType("TEXT");
 
@@ -140,29 +125,6 @@ namespace EntityFramework.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Users");
-                });
-
-            modelBuilder.Entity("EntityFramework.Vente", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal>("Montant")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("NbrLitres")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal>("Prix")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Ventes");
                 });
 #pragma warning restore 612, 618
         }

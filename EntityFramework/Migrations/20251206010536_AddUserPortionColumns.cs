@@ -5,44 +5,35 @@
 namespace EntityFramework.Migrations
 {
     /// <inheritdoc />
-    public partial class AddDisplayFields : Migration
+    public partial class AddUserPortionColumns : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.AddColumn<decimal>(
+                name: "DeliveredLiters",
+                table: "Users",
+                type: "TEXT",
+                nullable: true);
+
             migrationBuilder.AddColumn<string>(
-                name: "DisplayAmountDue",
+                name: "DisplayDelivered",
                 table: "Users",
                 type: "TEXT",
                 maxLength: 50,
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
-                name: "DisplayNbrBags",
+                name: "DisplayPortion",
                 table: "Users",
                 type: "TEXT",
                 maxLength: 50,
                 nullable: true);
 
-            migrationBuilder.AddColumn<string>(
-                name: "DisplayUnitPrice",
+            migrationBuilder.AddColumn<decimal>(
+                name: "PortionLiters",
                 table: "Users",
                 type: "TEXT",
-                maxLength: 50,
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "DisplayWeight",
-                table: "Users",
-                type: "TEXT",
-                maxLength: 50,
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "DisplayRendement",
-                table: "Users",
-                type: "TEXT",
-                maxLength: 50,
                 nullable: true);
         }
 
@@ -50,23 +41,19 @@ namespace EntityFramework.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "DisplayAmountDue",
+                name: "DeliveredLiters",
                 table: "Users");
 
             migrationBuilder.DropColumn(
-                name: "DisplayNbrBags",
+                name: "DisplayDelivered",
                 table: "Users");
 
             migrationBuilder.DropColumn(
-                name: "DisplayUnitPrice",
+                name: "DisplayPortion",
                 table: "Users");
 
             migrationBuilder.DropColumn(
-                name: "DisplayWeight",
-                table: "Users");
-
-            migrationBuilder.DropColumn(
-                name: "DisplayRendement",
+                name: "PortionLiters",
                 table: "Users");
         }
     }

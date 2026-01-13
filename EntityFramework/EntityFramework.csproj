@@ -8,6 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Platforms>AnyCPU;x64;x86</Platforms>
     <StartupObject>EntityFramework.Program</StartupObject>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>

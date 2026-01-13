@@ -9,18 +9,29 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
 using QuestPDF.Infrastructure;
 using Serilog;
+
 namespace EntityFramework
 {
     internal static class Program
     {
+        // RegisterApplicationRestart: allow Windows to restart the app after updates/crashes (best-effort)
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern int RegisterApplicationRestart(string pwzCommandline, int dwFlags);
+
         [STAThread]
         internal static void Main()
         {
-            //Log.Logger = new LoggerConfiguration()
-            //.MinimumLevel.Debug()
-            //.WriteTo.File("logs/log.txt", rollingInterval: RollingInterval.Day)
-            //.CreateLogger();
-            //Log.Information("==>Program started");
+            // Best-effort: register for automatic restart after crash/OS updates.
+            // Call early so Windows can record restart settings.
+            try
+            {
+                RegisterApplicationRestart(null, 0);
+            }
+            catch
+            {
+                // ignore failures on platforms where API is unavailable
+            }
+
             // Configure QuestPDF license if needed
             QuestPDF.Settings.License = LicenseType.Community;
 
@@ -146,8 +157,6 @@ namespace EntityFramework
         }
 
         // Read motherboard serial using WMI (Win32_BaseBoard only). Windows-only.
-
-
         public static string GetMotherboardSerial()
         {
             var process = new Process
@@ -168,6 +177,5 @@ namespace EntityFramework
 
             return result;
         }
-
     }
 }

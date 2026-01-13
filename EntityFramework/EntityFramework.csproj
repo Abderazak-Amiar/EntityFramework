@@ -25,6 +25,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="bin\Release\net8.0-windows\UserData.db" />
+    <None Include="bin\x64\Debug\net8.0-windows\UserData.db" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.22">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

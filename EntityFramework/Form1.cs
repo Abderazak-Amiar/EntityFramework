@@ -350,7 +350,8 @@ namespace EntityFramework
             {
                 using var ctx = new DataContext();
                 // Sorted by Id descending so newest/last-inserted users appear first in ItemList
-                var users = ctx.Users?.OrderByDescending(u => u.Id).ToList() ?? new List<User>();
+                // Only load the most recent 20 users to keep the UI responsive
+                var users = ctx.Users?.OrderByDescending(u => u.Id).Take(20).ToList() ?? new List<User>();
                 DatabaseUsers = users;
                 usersBinding.DataSource = DatabaseUsers;
                 // Ensure grid doesn't auto-select first row
@@ -455,31 +456,43 @@ namespace EntityFramework
         {
             try
             {
-                if (DatabaseUsers == null || usersBinding == null)
-                    return;
-
+                // If no search term, restore the most recent loaded users
                 if (string.IsNullOrWhiteSpace(text))
                 {
+                    // Ensure we have the recent users loaded
+                    if (DatabaseUsers == null || DatabaseUsers.Count == 0)
+                        RefreshUsers();
+
                     usersBinding.DataSource = DatabaseUsers;
                     ClearGridSelection();
                     return;
                 }
 
+                // Non-empty search: query the database directly so we search all rows, not only the loaded ones.
                 var term = text.Trim();
-                var filtered = DatabaseUsers.Where(u =>
-                    (!string.IsNullOrEmpty(u.Name) && u.Name.IndexOf(term, StringComparison.CurrentCultureIgnoreCase) >= 0)
-                    || (!string.IsNullOrEmpty(u.Phone) && u.Phone.IndexOf(term, StringComparison.CurrentCultureIgnoreCase) >= 0)
-                    || (!string.IsNullOrEmpty(u.Address) && u.Address.IndexOf(term, StringComparison.CurrentCultureIgnoreCase) >= 0)
-                ).ToList();
+                var termLower = term.ToLowerInvariant();
 
-                usersBinding.DataSource = filtered;
+                using var ctx = new DataContext();
+                var q = (ctx.Users ?? Enumerable.Empty<User>().AsQueryable()).AsNoTracking();
+
+                // Perform case-insensitive contains on Name, Phone and Address
+                var results = q.Where(u =>
+                        (!string.IsNullOrEmpty(u.Name) && u.Name.ToLower().Contains(termLower))
+                        || (!string.IsNullOrEmpty(u.Phone) && u.Phone.ToLower().Contains(termLower))
+                        || (!string.IsNullOrEmpty(u.Address) && u.Address.ToLower().Contains(termLower))
+                    )
+                    .OrderByDescending(u => u.Id)
+                    .Take(20) // limit results for performance
+                    .ToList();
+
+                usersBinding.DataSource = results;
                 ClearGridSelection();
-            }
-            catch
-            {
-                // swallow
-            }
-        }
+             }
+             catch
+             {
+                 // swallow
+             }
+         }
 
         // Numbering/config for ItemList
 

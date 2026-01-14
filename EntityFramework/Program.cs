@@ -25,7 +25,7 @@ namespace EntityFramework
             // Call early so Windows can record restart settings.
             try
             {
-                RegisterApplicationRestart(null, 0);
+                RegisterApplicationRestart(string.Empty, 0);
             }
             catch
             {
@@ -49,43 +49,10 @@ namespace EntityFramework
             var current = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
             Environment.SetEnvironmentVariable("PATH", path + Path.PathSeparator + current);
 
-            // Apply EF migrations and perform license check
+            // Apply EF migrations (removed legacy license checks per request)
             using (var context = new DataContext())
             {
                 context.Database.Migrate();
-
-                // Defensive: ensure LicenseKey column exists in Parameters table
-                try
-                {
-                    var connection = (SqliteConnection)context.Database.GetDbConnection();
-                    connection.Open();
-                    using (var cmd = connection.CreateCommand())
-                    {
-                        cmd.CommandText = "PRAGMA table_info('Parameters')";
-                        using var reader = cmd.ExecuteReader();
-                        var hasLicenseKey = false;
-                        while (reader.Read())
-                        {
-                            var name = reader.IsDBNull(1) ? null : reader.GetString(1);
-                            if (string.Equals(name, "LicenseKey", StringComparison.OrdinalIgnoreCase))
-                            {
-                                hasLicenseKey = true;
-                                break;
-                            }
-                        }
-
-                        if (!hasLicenseKey)
-                        {
-                            using var addCmd = connection.CreateCommand();
-                            addCmd.CommandText = "ALTER TABLE Parameters ADD COLUMN LicenseKey TEXT";
-                            addCmd.ExecuteNonQuery();
-                        }
-                    }
-                }
-                catch
-                {
-                    // ignore -- we'll surface meaningful errors below when required
-                }
 
                 // Ensure a Parameters row exists (Id =1). If missing, create and persist it.
                 var parameters = context.Parameters!.SingleOrDefault(p => p.Id == 1);
@@ -94,58 +61,6 @@ namespace EntityFramework
                     parameters = new Parameters { Id = 1 };
                     context.Parameters!.Add(parameters);
                     context.SaveChanges();
-                }
-
-                // Always compare DB license key with machine license
-                var machineSerial = GetMotherboardSerial()?.Trim();
-                //Log.Information($"==>Machine Serial: {machineSerial}");
-
-                if (string.IsNullOrEmpty(machineSerial))
-                {
-                    var serialDisplay = machineSerial == null ? "(null)" : $"\"{machineSerial}\" (length={machineSerial.Length})";
-                    MessageBox.Show($"Impossible de lire le code matériel de la machine. L'application ne peut pas vérifier la licence.\nValeur retournée par GetMotherboardSerial(): {serialDisplay}", "Erreur licence", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-
-                // If no license in DB -> prompt user to enter one and validate against machine serial
-                if (string.IsNullOrWhiteSpace(parameters.LicenseKey))
-                {
-                    bool validated = false;
-                    while (!validated)
-                    {
-                        using var form = new LicenseForm(parameters.LicenseKey);
-                        var res = form.ShowDialog();
-                        if (res != DialogResult.OK)
-                        {
-                            // user cancelled -> exit application
-                            return;
-                        }
-
-                        var entered = form.LicenseKey?.Trim();
-                        //Log.Information($"==>Entered License: {entered}");
-                        if (!string.IsNullOrEmpty(entered) &&
-                            string.Equals(entered, machineSerial, StringComparison.OrdinalIgnoreCase))
-                        {
-                            parameters.LicenseKey = entered;
-                            // parameters is tracked (added or queried), so just save
-                            context.SaveChanges();
-                            validated = true;
-                            MessageBox.Show("Licence validée et enregistrée.", "Succès", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        }
-                        else
-                        {
-                            MessageBox.Show("Le code licence n'est pas valide. Veuillez réessayer.", "Licence invalide", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        }
-                    }
-                }
-                else
-                {
-                    // License exists: compare with current machine serial
-                    if (!string.Equals(parameters.LicenseKey?.Trim(), machineSerial, StringComparison.OrdinalIgnoreCase))
-                    {
-                        MessageBox.Show("La licence enregistrée ne correspond pas à cette machine. Contactez le support.", "Licence invalide", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        return;
-                    }
                 }
             }
 

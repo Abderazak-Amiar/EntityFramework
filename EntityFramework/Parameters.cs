@@ -30,8 +30,6 @@ namespace EntityFramework
 
         public void Touch() => UpdatedAt = DateTime.UtcNow;
 
-        // NEW: persisted license key (store motherboard-bound license)
-        [MaxLength(200)]
-        public string? LicenseKey { get; set; }
+        // Note: license key handling removed in this version; column may still exist in DB but is unused.
     }
 }

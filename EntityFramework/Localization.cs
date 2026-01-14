@@ -137,8 +137,10 @@ namespace EntityFramework
         {
             foreach (ToolStripItem item in items)
             {
-                try { rm.ApplyResources(item, item.Name); } catch { }
-
+                if (!string.IsNullOrEmpty(item.Name))
+                {
+                    try { rm.ApplyResources(item, item.Name); } catch { }
+                }
                 if (item is ToolStripMenuItem menuItem && menuItem.DropDownItems != null && menuItem.DropDownItems.Count > 0)
                 {
                     ApplyToolStripItemsResources(rm, menuItem.DropDownItems);

@@ -84,69 +84,7 @@ namespace EntityFramework
                         // Header: reuse logo/company layout similar to user receipt
                         page.Header().Column(col =>
                         {
-                            byte[]? imageBytes = null;
-                            var baseDir = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
-                            var candidates = new[]
-                            {
-                                Path.Combine(baseDir, "Images", "logoM3insra.svg"),
-                                Path.Combine(baseDir, "logoM3insra.svg")
-                            };
-
-                            foreach (var path in candidates)
-                            {
-                                try
-                                {
-                                    if (!File.Exists(path)) continue;
-                                    var raw = File.ReadAllBytes(path);
-                                    imageBytes = path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
-                                        ? RenderSvgToPng(raw, targetWidthPx: 800)
-                                        : raw;
-                                    Debug.WriteLine($"QuestPDF: using image file {path}");
-                                    break;
-                                }
-                                catch (Exception ex)
-                                {
-                                    Debug.WriteLine($"QuestPDF: failed reading {path}: {ex.Message}");
-                                }
-                            }
-
-                            if (imageBytes == null)
-                            {
-                                try
-                                {
-                                    var asm = Assembly.GetExecutingAssembly();
-                                    var names = asm.GetManifestResourceNames();
-                                    var found = names.FirstOrDefault(n => n.EndsWith("logoM3insra.svg", StringComparison.OrdinalIgnoreCase));
-                                    if (found != null)
-                                    {
-                                        using var s = asm.GetManifestResourceStream(found);
-                                        if (s != null)
-                                        {
-                                            using var ms = new MemoryStream();
-                                            s.CopyTo(ms);
-                                            var raw = ms.ToArray();
-                                            imageBytes = found.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
-                                                ? RenderSvgToPng(raw, targetWidthPx: 800)
-                                                : raw;
-                                            Debug.WriteLine($"QuestPDF: using embedded resource {found}");
-                                        }
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    Debug.WriteLine($"QuestPDF: embedded resource load failed: {ex.Message}");
-                                }
-                            }
-
-                            if (imageBytes != null && imageBytes.Length > 0)
-                            {
-                                col.Item().AlignCenter().Width(70).Image(imageBytes);
-                            }
-                            else
-                            {
-                                col.Item().PaddingTop(0).Text("Logo de l'entreprise").FontSize(12).AlignCenter();
-                            }
-
+                            // Logo removed: only show company info
                             // Company info from Parameters (safe read)
                             try
                             {
@@ -348,69 +286,7 @@ namespace EntityFramework
                     // Header
                     page.Header().Column(col =>
                     {
-                        byte[]? imageBytes = null;
-                        var baseDir = AppDomain.CurrentDomain.BaseDirectory ?? Environment.CurrentDirectory;
-                        var candidates = new[]
-                        {
-                            Path.Combine(baseDir, "Images", "logoM3insra.svg"),
-                            Path.Combine(baseDir, "logoM3insra.svg")
-                        };
-
-                        foreach (var path in candidates)
-                        {
-                            try
-                            {
-                                if (!File.Exists(path)) continue;
-                                var raw = File.ReadAllBytes(path);
-                                imageBytes = path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
-                                    ? RenderSvgToPng(raw, targetWidthPx: 800)
-                                    : raw;
-                                Debug.WriteLine($"QuestPDF: using image file {path}");
-                                break;
-                            }
-                            catch (Exception ex)
-                            {
-                                Debug.WriteLine($"QuestPDF: failed reading {path}: {ex.Message}");
-                            }
-                        }
-
-                        if (imageBytes == null)
-                        {
-                            try
-                            {
-                                var asm = Assembly.GetExecutingAssembly();
-                                var names = asm.GetManifestResourceNames();
-                                var found = names.FirstOrDefault(n => n.EndsWith("logoM3insra.svg", StringComparison.OrdinalIgnoreCase));
-                                if (found != null)
-                                {
-                                    using var s = asm.GetManifestResourceStream(found);
-                                    if (s != null)
-                                    {
-                                        using var ms = new MemoryStream();
-                                        s.CopyTo(ms);
-                                        var raw = ms.ToArray();
-                                        imageBytes = found.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
-                                            ? RenderSvgToPng(raw, targetWidthPx: 800)
-                                            : raw;
-                                        Debug.WriteLine($"QuestPDF: using embedded resource {found}");
-                                    }
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Debug.WriteLine($"QuestPDF: embedded resource load failed: {ex.Message}");
-                            }
-                        }
-
-                        if (imageBytes != null && imageBytes.Length > 0)
-                        {
-                            col.Item().AlignCenter().Width(70).Image(imageBytes);
-                        }
-                        else
-                        {
-                            col.Item().PaddingTop(0).Text("Logo de l'entreprise").FontSize(12).AlignCenter();
-                        }
-
+                        // Logo removed: only show company info
                         // Company info (from Parameters)
                         try
                         {

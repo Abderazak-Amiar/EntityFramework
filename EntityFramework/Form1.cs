@@ -2303,7 +2303,6 @@ namespace EntityFramework
                 if (sanitized != original)
                 {
                     var selStart = tb.SelectionStart;
-            
                     // avoid re-entrancy by temporarily detaching
                     tb.TextChanged -= NoComma_TextChanged;
                     try
